@@ -66,18 +66,13 @@ def select_seg1_questions(db: Session, years_of_experience: float) -> List[model
     questions += pull("medium", medium_count)
     questions += pull("low", low_count)
 
-    # If we didn't hit the target, fill from any difficulty
+    # If we didn't hit the target, fill with any active question (no bracket filter)
     if len(questions) < total:
         used_ids = {q.id for q in questions}
-        extras_query = db.query(models.QuestionSeg1).filter(
+        pool = db.query(models.QuestionSeg1).filter(
             models.QuestionSeg1.is_active == True,
             ~models.QuestionSeg1.id.in_(used_ids),
-        )
-        if bracket_id:
-            extras_query = extras_query.filter(
-                models.QuestionSeg1.experience_bracket_ids.contains([bracket_id])
-            )
-        pool = extras_query.all()
+        ).all()
         needed = total - len(questions)
         questions += random.sample(pool, min(needed, len(pool)))
 

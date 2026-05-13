@@ -29,7 +29,9 @@ export default function Assessment() {
       setSegData(r.data);
       setSegment(seg); setCurrent(0);
       const init = {};
-      (r.data.saved_responses || []).forEach(s => { init[s.question_id] = s; });
+      (r.data.saved_responses || []).forEach(s => {
+        init[s.question_id] = s;
+      });
       setAnswers(init);
     } finally { setLoading(false); }
   }, [token]);

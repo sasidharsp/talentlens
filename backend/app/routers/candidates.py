@@ -190,7 +190,11 @@ def get_segment(session_token: str, segment_number: int, db: Session = Depends(g
 
     session = _get_session_or_404(db, session_token)
     candidate = session.candidate
+    # role may be None if candidate registered via requisition with no role_id
     role = candidate.role
+    role_name = role.name if role else (
+        candidate.requisition.title if candidate.requisition else ""
+    )
 
     if session.status == "SUBMITTED":
         raise HTTPException(status_code=400, detail="Assessment already submitted.")
@@ -220,13 +224,14 @@ def get_segment(session_token: str, segment_number: int, db: Session = Depends(g
                 "option_b": q.option_b,
                 "option_c": q.option_c,
                 "option_d": q.option_d,
+                "difficulty": q.difficulty,
                 "segment": 1,
                 "is_scenario": False,
             }
             for q in questions
         ]
     elif segment_number == 2:
-        questions = select_seg2_questions(db, candidate.years_of_experience, role.name)
+        questions = select_seg2_questions(db, candidate.years_of_experience, role_name)
         timer = get_config_int(db, "seg2_timer_minutes", 8) * 60
         formatted = [
             {
@@ -236,6 +241,7 @@ def get_segment(session_token: str, segment_number: int, db: Session = Depends(g
                 "option_b": q.option_b,
                 "option_c": q.option_c,
                 "option_d": q.option_d,
+                "difficulty": q.difficulty,
                 "segment": 2,
                 "is_scenario": False,
                 "has_rationale": True,
@@ -243,7 +249,7 @@ def get_segment(session_token: str, segment_number: int, db: Session = Depends(g
             for q in questions
         ]
     else:  # segment 3
-        questions = select_seg3_questions(db, role.name)
+        questions = select_seg3_questions(db, role_name)
         timer = get_config_int(db, "seg3_timer_minutes", 4) * 60
         formatted = [
             {
@@ -269,27 +275,28 @@ def get_segment(session_token: str, segment_number: int, db: Session = Depends(g
         session.current_segment = 3
     db.commit()
 
-    # Get existing responses for resume
-    saved_responses = {}
+    # Get existing responses for resume — returned as LIST for frontend compatibility
+    saved = []
     if existing:
         all_resp = db.query(models.SegmentResponse).filter(
             models.SegmentResponse.session_id == session.id,
             models.SegmentResponse.segment_number == segment_number,
         ).all()
-        saved_responses = {r.question_id: r for r in all_resp}
+        saved = [
+            {
+                "question_id": r.question_id,
+                "selected_answer": r.selected_answer,
+                "rationale_text": r.rationale_text,
+                "free_text_response": r.free_text_response,
+            }
+            for r in all_resp
+        ]
 
     return {
         "segment": segment_number,
         "questions": formatted,
         "timer_seconds": timer,
-        "saved_responses": {
-            qid: {
-                "selected_answer": r.selected_answer,
-                "rationale_text": r.rationale_text,
-                "free_text_response": r.free_text_response,
-            }
-            for qid, r in saved_responses.items()
-        },
+        "saved_responses": saved,
     }
 
 
