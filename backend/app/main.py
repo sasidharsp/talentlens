@@ -51,7 +51,10 @@ def seed_defaults():
         # ── Safe migrations for new columns (won't fail if already exists) ──
         from sqlalchemy import text
         migrations = [
+            # Add requisition_id column if not present
             "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS requisition_id INTEGER REFERENCES requisitions(id)",
+            # Make role_id nullable — was NOT NULL in original schema, now optional since requisitions introduced
+            "ALTER TABLE candidates ALTER COLUMN role_id DROP NOT NULL",
         ]
         for sql in migrations:
             try:
