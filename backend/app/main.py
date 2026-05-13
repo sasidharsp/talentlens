@@ -48,6 +48,18 @@ def seed_defaults():
     """Seed the database with default configuration and a super admin account."""
     db: Session = SessionLocal()
     try:
+        # ── Safe migrations for new columns (won't fail if already exists) ──
+        from sqlalchemy import text
+        migrations = [
+            "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS requisition_id INTEGER REFERENCES requisitions(id)",
+        ]
+        for sql in migrations:
+            try:
+                db.execute(text(sql))
+                db.commit()
+            except Exception:
+                db.rollback()  # Column already exists or other non-fatal error
+
         # ── Default super admin ──
         if not db.query(models.User).filter(models.User.email == "admin@talentlens.io").first():
             admin_user = models.User(

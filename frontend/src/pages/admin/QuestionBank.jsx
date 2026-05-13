@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../../api/client';
+import { downloadFile } from '../../api/download';
 import {
   Plus, Upload, Download, Trash2, BookOpen,
   FileSpreadsheet, AlertTriangle, CheckCircle2,
@@ -212,15 +213,13 @@ export default function QuestionBank() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {/* Template download */}
-          <a
-            href={`/api/admin/questions/seg${seg}/template`}
-            download
+          <button
             className="btn btn-secondary btn-sm"
-            style={{ textDecoration: 'none' }}
+            onClick={() => downloadFile(`/api/admin/questions/seg${seg}/template`, `TalentLens_Segment${seg}_Template.xlsx`)}
             title="Download blank Excel template for this segment"
           >
             <FileSpreadsheet size={14} /> Download Template
-          </a>
+          </button>
 
           {/* Import */}
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={doImport} />
@@ -229,14 +228,12 @@ export default function QuestionBank() {
           </button>
 
           {/* Export */}
-          <a
-            href={`/api/admin/questions/seg${seg}/export`}
-            download
+          <button
             className="btn btn-secondary btn-sm"
-            style={{ textDecoration: 'none' }}
+            onClick={() => downloadFile(`/api/admin/questions/seg${seg}/export`, `talentlens_seg${seg}_export.xlsx`)}
           >
             <Download size={14} /> Export
-          </a>
+          </button>
 
           {/* Purge */}
           {total > 0 && (

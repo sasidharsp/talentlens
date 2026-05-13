@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/client';
+import { downloadFile } from '../../api/download';
 import { Save, AlertCircle, CheckCircle2, Download, Database, FolderArchive, Shield } from 'lucide-react';
 
 const GROUPS = {
@@ -105,14 +106,13 @@ export default function Settings() {
                   </div>
                 </div>
               </div>
-              <a
-                href="/api/admin/backup/resumes"
-                download
+              <button
                 className="btn btn-secondary btn-sm"
-                style={{ flexShrink: 0, textDecoration: 'none' }}
+                style={{ flexShrink: 0 }}
+                onClick={() => downloadFile('/api/admin/backup/resumes', 'talentlens_resumes.zip')}
               >
                 <Download size={14} /> Download ZIP
-              </a>
+              </button>
             </div>
 
             {/* Database backup */}
@@ -130,14 +130,13 @@ export default function Settings() {
                   </div>
                 </div>
               </div>
-              <a
-                href="/api/admin/backup/database"
-                download
+              <button
                 className="btn btn-secondary btn-sm"
-                style={{ flexShrink: 0, textDecoration: 'none' }}
+                style={{ flexShrink: 0 }}
+                onClick={() => downloadFile('/api/admin/backup/database', 'talentlens_db_backup.sql')}
               >
                 <Download size={14} /> Download SQL
-              </a>
+              </button>
             </div>
 
             <div style={{ fontSize: 12, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 6, paddingTop: 4 }}>

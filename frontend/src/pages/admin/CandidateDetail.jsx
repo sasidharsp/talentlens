@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
+import { downloadFile } from '../../api/download';
 import {
   ArrowLeft, Download, Zap, Lock, Plus, CheckCircle2,
   Clock, Circle, User, Calendar, MessageSquare, Star,
@@ -269,7 +270,7 @@ export default function CandidateDetail() {
     finally { setEvaluating(false); }
   };
 
-  const downloadResume = () => window.open(`/api/admin/candidates/${id}/resume`, '_blank');
+  const downloadResume = () => downloadFile(`/api/admin/candidates/${id}/resume`, `resume_${candidate?.reference_code}.pdf`);
 
   if (loadError) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 80, gap: 16 }}>
