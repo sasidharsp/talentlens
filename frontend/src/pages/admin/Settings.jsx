@@ -27,7 +27,14 @@ export default function Settings() {
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
-    api.get('/admin/config').then(r => setConfig(r.data));
+    api.get('/admin/config').then(r => {
+      // API returns { key: { value: "15", description: "..." } } — flatten to { key: "15" }
+      const flat = {};
+      Object.entries(r.data).forEach(([k, v]) => {
+        flat[k] = typeof v === 'object' && v !== null ? v.value : v;
+      });
+      setConfig(flat);
+    });
   }, []);
 
   const save = async (key) => {

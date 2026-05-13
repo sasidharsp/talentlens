@@ -43,7 +43,7 @@ export default function Assessment() {
     autoSaveRef.current = setInterval(() => {
       if (segData && Object.keys(answers).length) {
         api.post(`/candidate/save-progress/${token}`, {
-          segment_number: segment,
+          segment: segment,
           responses: Object.values(answers),
         }).catch(() => {});
       }
@@ -62,9 +62,11 @@ export default function Assessment() {
         question_id: q.id,
         ...(answers[q.id] || {}),
       }));
-      await api.post(`/candidate/submit-segment/${token}`, { segment_number: segment, responses });
+      await api.post(`/candidate/submit-segment/${token}`, { segment, responses });
       if (segment < 3) { await loadSeg(segment + 1); }
       else { navigate('/thankyou'); }
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Submission failed. Please try again.');
     } finally { setSubmitting(false); }
   }, [submitting, segData, segment, token, answers, loadSeg, navigate]);
 

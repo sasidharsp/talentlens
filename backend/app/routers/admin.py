@@ -512,7 +512,7 @@ def get_config(
     current_user: models.User = Depends(require_admin),
 ):
     configs = db.query(models.SystemConfig).all()
-    return {c.key: {"value": c.value, "description": c.description} for c in configs}
+    return {c.key: c.value for c in configs}
 
 
 @router.put("/config")
