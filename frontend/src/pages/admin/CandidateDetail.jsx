@@ -308,7 +308,19 @@ export default function CandidateDetail() {
           <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
           <div>
             <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, fontWeight: 400 }}>{candidate?.full_name}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{candidate?.reference_code} · {candidate?.role?.name}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-2)', display:'flex', alignItems:'center', gap:6 }}>
+              {candidate?.reference_code}
+              {candidate?.requisition && (
+                <>
+                  <span>·</span>
+                  <span style={{ fontFamily:'monospace', fontWeight:700, color:'var(--primary)', background:'var(--primary-light)', padding:'1px 6px', borderRadius:4, fontSize:11 }}>
+                    {candidate.requisition.req_id}
+                  </span>
+                  <span>{candidate.requisition.title}</span>
+                </>
+              )}
+              {!candidate?.requisition && candidate?.role && <><span>·</span><span>{candidate.role.name}</span></>}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -374,7 +386,14 @@ export default function CandidateDetail() {
                   ['Full Name', candidate?.full_name],
                   ['Email', candidate?.email],
                   ['Mobile', candidate?.mobile],
-                  ['Applied Role', candidate?.role?.name],
+                  ['Requisition', candidate?.requisition
+                    ? <span style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color:'var(--primary)', background:'var(--primary-light)', padding:'1px 7px', borderRadius:4, border:'1px solid var(--primary-border)' }}>{candidate.requisition.req_id}</span>
+                        {candidate.requisition.title}
+                      </span>
+                    : candidate?.role?.name || '—'],
+                  ['Department', candidate?.requisition?.department || '—'],
+                  ['Location', candidate?.requisition?.location || '—'],
                   ['Experience', `${candidate?.years_of_experience} years`],
                   ['Current Organisation', candidate?.current_organization || '—'],
                   ['Qualification', candidate?.highest_qualification || '—'],

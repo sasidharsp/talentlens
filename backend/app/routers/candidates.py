@@ -43,7 +43,8 @@ async def register_candidate(
     full_name: str = Form(...),
     email: str = Form(...),
     mobile: str = Form(...),
-    role_id: int = Form(...),
+    requisition_id: Optional[int] = Form(None),
+    role_id: Optional[int] = Form(None),          # kept for backward compat
     years_of_experience: float = Form(...),
     current_organization: Optional[str] = Form(None),
     highest_qualification: Optional[str] = Form(None),
@@ -51,27 +52,32 @@ async def register_candidate(
     resume: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    # Duplicate check (same email + role within 30 days)
+    if not requisition_id and not role_id:
+        raise HTTPException(400, "Please select a requisition / role.")
+
+    # Validate requisition
+    requisition = None
+    if requisition_id:
+        requisition = db.query(models.Requisition).filter(
+            models.Requisition.id == requisition_id,
+            models.Requisition.is_active == True,
+        ).first()
+        if not requisition:
+            raise HTTPException(400, "Selected requisition is no longer active.")
+
+    # Duplicate check — same email + requisition within cooldown
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(days=30)
-    existing = db.query(models.Candidate).filter(
+    dup_q = db.query(models.Candidate).filter(
         models.Candidate.email == email,
-        models.Candidate.role_id == role_id,
         models.Candidate.created_at >= cutoff,
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="A submission for this email and role already exists within the last 30 days.",
-        )
-
-    # Validate role
-    role = db.query(models.RoleConfig).filter(
-        models.RoleConfig.id == role_id,
-        models.RoleConfig.is_active == True,
-    ).first()
-    if not role:
-        raise HTTPException(status_code=400, detail="Invalid or inactive role selected.")
+    )
+    if requisition_id:
+        dup_q = dup_q.filter(models.Candidate.requisition_id == requisition_id)
+    elif role_id:
+        dup_q = dup_q.filter(models.Candidate.role_id == role_id)
+    if dup_q.first():
+        raise HTTPException(409, "A submission for this email and requisition already exists within the last 30 days.")
 
     # Handle resume upload
     resume_path = None
@@ -99,6 +105,7 @@ async def register_candidate(
         email=email,
         mobile=mobile,
         role_id=role_id,
+        requisition_id=requisition_id,
         years_of_experience=years_of_experience,
         current_organization=current_organization,
         highest_qualification=highest_qualification,

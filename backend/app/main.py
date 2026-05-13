@@ -9,6 +9,7 @@ from app import models
 from app.auth import get_password_hash
 from app.config import settings
 from app.routers import auth, candidates, admin, questions
+from app.routers import requisitions as req_router
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
@@ -35,6 +36,7 @@ app.include_router(auth.router)
 app.include_router(candidates.router)
 app.include_router(admin.router)
 app.include_router(questions.router)
+app.include_router(req_router.router)
 
 # Serve uploaded files
 os.makedirs(settings.upload_dir, exist_ok=True)

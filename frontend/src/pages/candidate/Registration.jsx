@@ -4,9 +4,9 @@ import api from '../../api/client';
 import { Upload, FileText, X, Zap, CheckCircle } from 'lucide-react';
 
 export default function Registration() {
-  const [roles, setRoles] = useState([]);
+  const [requisitions, setRequisitions] = useState([]);
   const [form, setForm] = useState({
-    full_name:'', email:'', mobile:'', role_id:'', years_of_experience:'',
+    full_name:'', email:'', mobile:'', requisition_id:'', years_of_experience:'',
     current_organization:'', highest_qualification:'', linkedin_url:''
   });
   const [file, setFile] = useState(null);
@@ -15,7 +15,7 @@ export default function Registration() {
   const fileRef = useRef();
   const navigate = useNavigate();
 
-  useEffect(() => { api.get('/candidate/roles').then(r => setRoles(r.data)); }, []);
+  useEffect(() => { api.get('/candidate/requisitions').then(r => setRequisitions(r.data)); }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -87,10 +87,10 @@ export default function Registration() {
                 <div><label className="label">Email Address <span style={{color:'var(--danger)'}}>*</span></label><input type="email" className="input" required value={form.email} onChange={e=>set('email',e.target.value)} placeholder="you@email.com" /></div>
                 <div><label className="label">Mobile Number <span style={{color:'var(--danger)'}}>*</span></label><input className="input" required value={form.mobile} onChange={e=>set('mobile',e.target.value)} placeholder="+91 98765 43210" /></div>
                 <div><label className="label">Years of Experience <span style={{color:'var(--danger)'}}>*</span></label><input type="number" className="input" required min="0" max="50" step="0.5" value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)} placeholder="e.g. 4.5" /></div>
-                <div><label className="label">Applying for Role <span style={{color:'var(--danger)'}}>*</span></label>
-                  <select className="input" required value={form.role_id} onChange={e=>set('role_id',e.target.value)}>
+                <div><label className="label">Applying For <span style={{color:'var(--danger)'}}>*</span></label>
+                  <select className="input" required value={form.requisition_id} onChange={e=>set('requisition_id',e.target.value)}>
                     <option value="">Select role…</option>
-                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {requisitions.length === 0 ? <option disabled>No active requisitions — contact admin</option> : requisitions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
                 </div>
                 <div><label className="label">Current Organisation</label><input className="input" value={form.current_organization} onChange={e=>set('current_organization',e.target.value)} placeholder="Optional" /></div>

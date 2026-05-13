@@ -71,6 +71,22 @@ class ExperienceBracket(Base):
     is_active = Column(Boolean, default=True)
 
 
+# ─────────────────────────── REQUISITIONS ───────────────────────────
+class Requisition(Base):
+    __tablename__ = "requisitions"
+    id = Column(Integer, primary_key=True, index=True)
+    req_id = Column(String(50), unique=True, nullable=False, index=True)  # e.g. REQ-2024-001
+    title = Column(String(255), nullable=False)                           # e.g. Senior Java Developer
+    department = Column(String(100), nullable=True)
+    location = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    candidates = relationship("Candidate", back_populates="requisition")
+
+
 # ─────────────────────────── CANDIDATES ───────────────────────────
 class Candidate(Base):
     __tablename__ = "candidates"
@@ -79,7 +95,8 @@ class Candidate(Base):
     full_name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False)
     mobile = Column(String(20), nullable=False)
-    role_id = Column(Integer, ForeignKey("roles_config.id"), nullable=False)
+    role_id = Column(Integer, ForeignKey("roles_config.id"), nullable=True)   # kept for legacy
+    requisition_id = Column(Integer, ForeignKey("requisitions.id"), nullable=True)
     years_of_experience = Column(Float, nullable=False)
     current_organization = Column(String(255), nullable=True)
     highest_qualification = Column(String(255), nullable=True)
@@ -89,6 +106,7 @@ class Candidate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     role = relationship("RoleConfig")
+    requisition = relationship("Requisition", back_populates="candidates")
     sessions = relationship("AssessmentSession", back_populates="candidate")
 
 

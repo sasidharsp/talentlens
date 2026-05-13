@@ -14,6 +14,7 @@ import Dashboard from './pages/admin/Dashboard'
 import CandidateList from './pages/admin/CandidateList'
 import CandidateDetail from './pages/admin/CandidateDetail'
 import QuestionBank from './pages/admin/QuestionBank'
+import Requisitions from './pages/admin/Requisitions'
 import Settings from './pages/admin/Settings'
 import UserManagement from './pages/admin/UserManagement'
 import AdminLayout from './components/AdminLayout'
@@ -54,6 +55,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="candidates" element={<CandidateList />} />
             <Route path="candidates/:sessionId" element={<CandidateDetail />} />
+            <Route path="requisitions" element={<Requisitions />} />
             <Route path="questions" element={<QuestionBank />} />
             <Route path="settings" element={
               <ProtectedRoute requireAdmin><Settings /></ProtectedRoute>
