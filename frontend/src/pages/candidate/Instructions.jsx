@@ -4,7 +4,7 @@ import api from '../../api/client';
 import { Clock, BookOpen, Brain, Lightbulb, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
 
 export default function Instructions() {
-  const { token } = useParams();
+  const { sessionToken: token } = useParams();
   const { state } = useLocation();
   const navigate = useNavigate();
   const [data, setData] = useState(null);

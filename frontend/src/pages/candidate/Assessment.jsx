@@ -11,7 +11,7 @@ const SEG_INFO = {
 };
 
 export default function Assessment() {
-  const { token } = useParams();
+  const { sessionToken: token } = useParams();
   const navigate = useNavigate();
   const [segData, setSegData] = useState(null);
   const [segment, setSegment] = useState(1);
