@@ -74,7 +74,7 @@ def list_candidates(
             models.CandidatureStatus,
         )
         .join(models.Candidate, models.AssessmentSession.candidate_id == models.Candidate.id)
-        .join(models.RoleConfig, models.Candidate.role_id == models.RoleConfig.id)
+        .outerjoin(models.RoleConfig, models.Candidate.role_id == models.RoleConfig.id)
         .outerjoin(models.EvaluationResult, models.AssessmentSession.id == models.EvaluationResult.session_id)
         .outerjoin(models.CandidatureStatus, models.AssessmentSession.id == models.CandidatureStatus.session_id)
     )
@@ -97,19 +97,26 @@ def list_candidates(
 
     items = []
     for session, candidate, role, evaluation, cs in rows:
+        role_display = (
+            role.name if role
+            else (candidate.requisition.title if candidate.requisition else "—")
+        )
+        req = candidate.requisition
         items.append({
             "session_id": session.id,
             "reference_code": candidate.reference_code,
             "full_name": candidate.full_name,
             "email": candidate.email,
             "mobile": candidate.mobile,
-            "role_name": role.name,
+            "role_name": role_display,
+            "requisition": {
+                "id": req.id,
+                "req_id": req.req_id,
+                "title": req.title,
+            } if req else None,
             "years_of_experience": candidate.years_of_experience,
             "submitted_at": session.submitted_at,
             "status": session.status,
-            "seg1_score": evaluation.seg1_score if evaluation else None,
-            "seg2_score": evaluation.seg2_score if evaluation else None,
-            "seg3_score": evaluation.seg3_score if evaluation else None,
             "overall_score": evaluation.overall_score if evaluation else None,
             "final_status": cs.final_status if cs else "pending",
         })

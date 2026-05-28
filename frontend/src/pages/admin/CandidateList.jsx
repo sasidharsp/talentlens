@@ -12,7 +12,7 @@ const scoreColor = (v) => !v ? 'var(--text-3)' : v>=70 ? 'var(--success)' : v>=5
 const STATUSES = ['', 'REGISTERED', 'IN_PROGRESS', 'SUBMITTED', 'EVALUATED'];
 
 export default function CandidateList() {
-  const [data, setData] = useState({ items: [], total: 0, pages: 1 });
+  const [data, setData] = useState({ items: [], total: 0, total_pages: 1 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -87,7 +87,14 @@ export default function CandidateList() {
                         <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-2)' }}>{c.reference_code}</td>
                         <td style={{ fontWeight: 500 }}>{c.full_name}</td>
                         <td style={{ color: 'var(--text-2)', fontSize: 13 }}>{c.email}</td>
-                        <td style={{ color: 'var(--text-2)' }}>{c.role_name}</td>
+                        <td>
+                          <div style={{ fontSize: 13, color: 'var(--text)' }}>{c.role_name}</div>
+                          {c.requisition && (
+                            <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--primary)', marginTop: 2 }}>
+                              {c.requisition.req_id}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ color: 'var(--text-2)' }}>{c.years_of_experience}y</td>
                         <td>{statusBadge(c.status)}</td>
                         <td style={{ fontWeight: 600, color: scoreColor(c.overall_score) }}>
@@ -107,14 +114,14 @@ export default function CandidateList() {
               </div>
 
               {/* Pagination */}
-              {data.pages > 1 && (
+              {data.total_pages > 1 && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Page {page} of {data.pages}</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Page {page} of {data.total_pages}</span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p - 1)} disabled={page === 1}>
                       <ChevronLeft size={14} /> Prev
                     </button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= data.pages}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= data.total_pages}>
                       Next <ChevronRight size={14} />
                     </button>
                   </div>
