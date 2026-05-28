@@ -3,7 +3,7 @@ Requisition management — admin creates job requisitions which appear
 as the "Applying for" dropdown on the candidate registration page.
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
