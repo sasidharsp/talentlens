@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import { Upload, FileText, X, Zap, CheckCircle } from 'lucide-react';
+import WebcamCapture from '../../components/WebcamCapture';
+import { Upload, FileText, X, Zap, CheckCircle, Camera } from 'lucide-react';
 
 export default function Registration() {
   const [requisitions, setRequisitions] = useState([]);
@@ -10,6 +11,8 @@ export default function Registration() {
     current_organization:'', highest_qualification:'', linkedin_url:''
   });
   const [file, setFile] = useState(null);
+  const [webcamPhoto, setWebcamPhoto] = useState(null);
+  const [showWebcam, setShowWebcam] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef();
@@ -35,6 +38,14 @@ export default function Registration() {
       Object.entries(form).forEach(([k, v]) => v && fd.append(k, v));
       if (file) fd.append('resume', file);
       const r = await api.post('/candidate/register', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      // Upload webcam photo if captured
+      if (webcamPhoto) {
+        const photoFd = new FormData();
+        photoFd.append('photo', webcamPhoto, 'webcam.jpg');
+        await api.post(`/candidate/webcam-photo/${r.data.session_token}`, photoFd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        }).catch(() => {});
+      }
       navigate(`/instructions/${r.data.session_token}`, { state: { reference_code: r.data.reference_code } });
     } catch (e) {
       setError(e.response?.data?.detail || 'Registration failed. Please try again.');
@@ -96,6 +107,37 @@ export default function Registration() {
                 <div><label className="label">Current Organisation</label><input className="input" value={form.current_organization} onChange={e=>set('current_organization',e.target.value)} placeholder="Optional" /></div>
                 <div><label className="label">Highest Qualification</label><input className="input" value={form.highest_qualification} onChange={e=>set('highest_qualification',e.target.value)} placeholder="e.g. B.Tech, MBA" /></div>
                 <div><label className="label">LinkedIn URL</label><input className="input" value={form.linkedin_url} onChange={e=>set('linkedin_url',e.target.value)} placeholder="https://linkedin.com/in/…" /></div>
+              </div>
+
+              {/* Webcam photo */}
+              <div style={{ marginBottom: 24 }}>
+                <label className="label">Identity Photo <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>(recommended for proctored assessment)</span></label>
+                {!showWebcam ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px', background: 'var(--surface-2)', borderRadius: 10, border: '1px dashed var(--border-2)' }}>
+                    {webcamPhoto ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <CheckCircle size={18} color="var(--success)" />
+                        <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>Photo captured</span>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowWebcam(true)}>Retake</button>
+                      </div>
+                    ) : (
+                      <>
+                        <Camera size={18} color="var(--text-3)" />
+                        <span style={{ fontSize: 13, color: 'var(--text-2)', flex: 1 }}>Capture a photo for identity verification</span>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowWebcam(true)}>
+                          <Camera size={14} /> Open Camera
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: 16 }}>
+                    <WebcamCapture
+                      onCapture={(blob, dataUrl) => { setWebcamPhoto(blob); if (dataUrl) setShowWebcam(false); }}
+                      onSkip={() => setShowWebcam(false)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Resume upload */}

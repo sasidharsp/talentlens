@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowRight, Loader } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Search, Filter, ChevronLeft, ChevronRight, ArrowRight, Loader, Trash2, Upload, Users } from 'lucide-react';
 
 const statusBadge = (s) => {
   const m = { REGISTERED:'badge-gray', IN_PROGRESS:'badge-amber', SUBMITTED:'badge-sky', EVALUATED:'badge-indigo', selected:'badge-green', rejected:'badge-red', pending:'badge-amber', on_hold:'badge-amber' };
@@ -12,11 +13,14 @@ const scoreColor = (v) => !v ? 'var(--text-3)' : v>=70 ? 'var(--success)' : v>=5
 const STATUSES = ['', 'REGISTERED', 'IN_PROGRESS', 'SUBMITTED', 'EVALUATED'];
 
 export default function CandidateList() {
+  const { isSuperAdmin } = useAuth();
   const [data, setData] = useState({ items: [], total: 0, total_pages: 1 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const fileRef = useRef();
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -35,6 +39,25 @@ export default function CandidateList() {
   const handleSearch = (v) => { setSearch(v); setPage(1); };
   const handleStatus = (v) => { setStatus(v); setPage(1); };
 
+  const deleteCandidate = async (e, sessionId) => {
+    e.stopPropagation();
+    if (!window.confirm('Permanently delete this candidate and all their data?')) return;
+    await api.delete(`/admin/candidates/${sessionId}`);
+    load();
+  };
+
+  const doBulkImport = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const fd = new FormData(); fd.append('file', f);
+    try {
+      const r = await api.post('/candidate/bulk-import', fd, { headers: {'Content-Type':'multipart/form-data'} });
+      setImportResult(r.data); load();
+    } catch (ex) {
+      setImportResult({ message: ex.response?.data?.detail || 'Import failed.', created: 0 });
+    }
+    e.target.value = '';
+  };
+
   return (
     <div>
       <div className="admin-topbar">
@@ -44,9 +67,20 @@ export default function CandidateList() {
             {data.total} total candidates
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }} onChange={doBulkImport} />
+          <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current.click()}>
+            <Upload size={14} /> Bulk Import
+          </button>
+        </div>
       </div>
 
       <div className="admin-content page-fade">
+        {importResult && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, fontSize: 13, background: importResult.created > 0 ? 'var(--success-light)' : 'var(--warning-light)', color: importResult.created > 0 ? 'var(--success)' : 'var(--warning)', border: `1px solid ${importResult.created > 0 ? 'var(--success-border)' : 'var(--warning-border)'}` }}>
+            {importResult.message}
+          </div>
+        )}
         {/* Filters */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
           <div className="search-wrap" style={{ flex: 1, maxWidth: 320 }}>
@@ -101,7 +135,14 @@ export default function CandidateList() {
                           {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}
                         </td>
                         <td>{c.final_status ? statusBadge(c.final_status) : <span style={{ color: 'var(--text-3)', fontSize: 13 }}>—</span>}</td>
-                        <td><ArrowRight size={14} color="var(--text-3)" /></td>
+                        <td onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <ArrowRight size={14} color="var(--text-3)" />
+                          {isSuperAdmin && (
+                            <button className="btn btn-danger btn-sm" onClick={e => deleteCandidate(e, c.session_id)} title="Delete">
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {data.items.length === 0 && (

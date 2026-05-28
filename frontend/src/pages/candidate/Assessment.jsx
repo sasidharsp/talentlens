@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import Timer from '../../components/Timer';
+import ProctoringWrapper from '../../components/ProctoringWrapper';
 import { ChevronLeft, ChevronRight, CheckCircle2, Zap } from 'lucide-react';
 
 const SEG_INFO = {
@@ -70,6 +71,10 @@ export default function Assessment() {
     } finally { setSubmitting(false); }
   }, [submitting, segData, segment, token, answers, loadSeg, navigate]);
 
+  const handleTerminate = useCallback((reason) => {
+    navigate('/thankyou?terminated=true');
+  }, [navigate]);
+
   if (loading) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
       <div className="spinner-lg spinner" />
@@ -87,6 +92,7 @@ export default function Assessment() {
   const info = SEG_INFO[segment] || SEG_INFO[1];
 
   return (
+    <ProctoringWrapper token={token} onTerminate={handleTerminate}>
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
       {/* Top bar */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -231,5 +237,6 @@ export default function Assessment() {
         </div>
       </div>
     </div>
+    </ProctoringWrapper>
   );
 }

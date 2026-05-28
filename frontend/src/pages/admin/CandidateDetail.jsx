@@ -251,6 +251,7 @@ export default function CandidateDetail() {
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const [data, setData] = useState(null);
+  const [proctorEvents, setProctorEvents] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [evaluating, setEvaluating] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
@@ -258,7 +259,13 @@ export default function CandidateDetail() {
   const load = () => {
     setLoadError('');
     api.get(`/admin/candidates/${id}`)
-      .then(r => setData(r.data))
+      .then(r => {
+        setData(r.data);
+        // Load proctor events separately
+        api.get(`/admin/candidates/${id}/proctor-events`)
+          .then(pe => setProctorEvents(pe.data || []))
+          .catch(() => {});
+      })
       .catch(e => setLoadError(e.response?.data?.detail || 'Failed to load candidate. Please try again.'));
   };
   useEffect(() => { load(); }, [id]);
@@ -296,6 +303,7 @@ export default function CandidateDetail() {
     { key: 'profile', label: 'Profile' },
     { key: 'responses', label: 'Assessment Responses' },
     { key: 'lifecycle', label: `Lifecycle${rounds.length ? ` (${rounds.length})` : ''}` },
+    { key: 'integrity', label: 'Integrity Report' },
   ];
 
   return (
@@ -550,6 +558,107 @@ export default function CandidateDetail() {
                   onUpdated={load}
                   isAdmin={isAdmin}
                 />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Integrity Report tab */}
+        {activeTab === 'integrity' && (
+          <div style={{ maxWidth: 700 }}>
+            {/* Score card */}
+            <div className="card" style={{ marginBottom: 16, padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)' }}>Integrity Score Card</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 2 }}>
+                    {session?.proctoring_status === 'terminated' ? '🔴 Session terminated for malpractice' :
+                     session?.proctoring_status === 'completed' ? '🟢 Assessment completed normally' : '🟡 Active / not yet evaluated'}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 42, fontWeight: 800, color: session?.integrity_score >= 80 ? 'var(--success)' : session?.integrity_score >= 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                    {session?.integrity_score != null ? `${session.integrity_score}` : '—'}
+                  </div>
+                  {session?.integrity_score != null && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>/ 100</div>}
+                </div>
+              </div>
+
+              {/* Webcam photo */}
+              {candidate?.webcam_photo_path && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Identity Photo</div>
+                  <img
+                    src={`/uploads/${candidate.webcam_photo_path}`}
+                    alt="Candidate photo"
+                    style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }}
+                    onError={e => e.target.style.display = 'none'}
+                  />
+                </div>
+              )}
+
+              {/* Violation breakdown */}
+              {(() => {
+                const counts = {};
+                proctorEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1; });
+                const items = [
+                  ['Tab Switches', 'tab_switch', 'var(--danger)'],
+                  ['Fullscreen Exits', 'fullscreen_exit', 'var(--danger)'],
+                  ['Gaze Violations', 'gaze_away', 'var(--warning)'],
+                  ['Paste Attempts', 'paste_attempt', 'var(--warning)'],
+                  ['Shortcut Attempts', 'shortcut_attempt', 'var(--text-2)'],
+                  ['Right-clicks', 'right_click', 'var(--text-3)'],
+                ];
+                return (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Violation Breakdown</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {items.map(([label, key, color]) => (
+                        <div key={key} style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '12px 14px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 24, fontWeight: 700, color: (counts[key] || 0) > 0 ? color : 'var(--success)' }}>{counts[key] || 0}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {session?.termination_reason && (
+                      <div style={{ marginTop: 12, background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)' }}>
+                        <strong>Termination Reason:</strong> {session.termination_reason}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Event log */}
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">Live Integrity Event Log</span>
+                <span className="badge badge-gray">{proctorEvents.length} events</span>
+              </div>
+              {proctorEvents.length === 0 ? (
+                <div style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+                  No integrity events recorded — clean session.
+                </div>
+              ) : (
+                <table className="tbl">
+                  <thead><tr><th>Timestamp</th><th>Event</th><th>Details</th></tr></thead>
+                  <tbody>
+                    {proctorEvents.map(e => {
+                      const isBad = ['tab_switch','fullscreen_exit','gaze_away','terminated_malpractice'].includes(e.event_type);
+                      const badgeClass = e.event_type === 'session_start' ? 'badge-green' : isBad ? 'badge-red' : 'badge-amber';
+                      return (
+                        <tr key={e.id}>
+                          <td style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-2)' }}>
+                            {new Date(e.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </td>
+                          <td><span className={`badge ${badgeClass}`}>{e.event_type.replace(/_/g, ' ')}</span></td>
+                          <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{e.details || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>

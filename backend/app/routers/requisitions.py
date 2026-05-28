@@ -146,3 +146,103 @@ def deactivate_requisition(
     r.is_active = False
     db.commit()
     return {"message": f"Requisition {r.req_id} deactivated."}
+
+# ─── CSV TEMPLATE DOWNLOAD ───
+@router.get("/api/admin/requisitions/template")
+def download_req_template(current_user=Depends(require_admin)):
+    """Download blank CSV template for bulk requisition upload."""
+    import io
+    from fastapi.responses import StreamingResponse
+    csv_content = "Req ID,Designation,Brief Description\nREQ-2024-001,Senior Java Developer,Experienced Java developer for BFSI applications\nREQ-2024-002,QA Engineer,Quality assurance for banking platforms\n"
+    return StreamingResponse(
+        io.BytesIO(csv_content.encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=TalentLens_Requisitions_Template.csv"},
+    )
+
+
+# ─── CSV BULK IMPORT ───
+@router.post("/api/admin/requisitions/import")
+async def import_requisitions(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    import io
+    import pandas as pd
+
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    try:
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"Could not read file: {e}")
+
+    # Normalize columns
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    df.dropna(how="all", inplace=True)
+
+    created = 0
+    errors = []
+
+    for idx, row in df.iterrows():
+        row_num = idx + 2
+        rv = row.where(pd.notna(row), None).to_dict()
+
+        _str = lambda k: str(rv.get(k) or "").strip()
+        req_id = (_str("req_id") or _str("req id")).upper()
+        title = _str("designation") or _str("title") or _str("job_title")
+        description = _str("brief_description") or _str("description")
+
+        if not req_id or not title:
+            errors.append({"row": row_num, "error": "Req ID and Designation are required"})
+            continue
+
+        existing = db.query(models.Requisition).filter_by(req_id=req_id).first()
+        if existing:
+            errors.append({"row": row_num, "error": f"Req ID {req_id} already exists"})
+            continue
+
+        r = models.Requisition(
+            req_id=req_id,
+            title=title,
+            description=description or None,
+            is_active=True,
+            created_by=current_user.id,
+        )
+        db.add(r)
+        created += 1
+
+    db.commit()
+    return {
+        "created": created,
+        "errors": errors,
+        "message": f"{created} requisition(s) imported. {len(errors)} skipped.",
+    }
+
+
+# ─── HARD DELETE ───
+@router.delete("/api/admin/requisitions/{rid}/delete")
+def hard_delete_requisition(
+    rid: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    r = db.query(models.Requisition).filter_by(id=rid).first()
+    if not r:
+        raise HTTPException(404, "Requisition not found.")
+
+    # Check if any candidates are linked
+    count = db.query(models.Candidate).filter_by(requisition_id=rid).count()
+    if count > 0:
+        raise HTTPException(
+            400,
+            f"Cannot delete — {count} candidate(s) linked to this requisition. Deactivate instead."
+        )
+    db.delete(r)
+    db.commit()
+    return {"message": f"Requisition {r.req_id} permanently deleted."}

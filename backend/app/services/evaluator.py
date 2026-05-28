@@ -46,72 +46,60 @@ def evaluate_scenario_with_llm(
     candidate_answer: str,
     reference_answer: str,
     scenario_text: str,
+    question_prompt: str = "",
 ) -> Dict[str, Any]:
     """
-    Use Claude to evaluate a scenario response on three dimensions:
-    - Relevance (0-10): Does the answer address the scenario?
-    - Context  (0-10): Does it show domain/industry understanding?
-    - Semantics (0-10): Is the meaning aligned with the reference answer?
-    Returns a dict with scores and justifications.
+    Use Claude to evaluate a scenario response.
+    Returns: { score, rationale, strengths, gaps, pending_review }
+    On failure: marks as pending_review instead of erroring out.
     """
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    prompt = f"""You are an expert evaluator for candidate assessment. Evaluate the candidate's answer to the following scenario question.
+    system_prompt = "You are an expert BFSI assessor evaluating candidate responses for professional roles."
 
-SCENARIO QUESTION:
-{scenario_text}
+    user_prompt = f"""Evaluate the candidate's answer against the ideal answer and rubric provided.
 
-REFERENCE ANSWER (for evaluator use only):
-{reference_answer}
+Scenario: {scenario_text}
 
-CANDIDATE'S ANSWER:
-{candidate_answer if candidate_answer else "[No answer provided]"}
+Question: {question_prompt or "Respond to the scenario above."}
 
-Evaluate the candidate's answer on THREE dimensions. Return ONLY valid JSON in this exact format:
+Ideal Answer / Rubric: {reference_answer}
+
+Candidate Answer: {candidate_answer if candidate_answer else "[No answer provided]"}
+
+Return ONLY valid JSON in this exact format:
 {{
-  "relevance": {{
-    "score": <integer 0-10>,
-    "justification": "<one sentence>"
-  }},
-  "context": {{
-    "score": <integer 0-10>,
-    "justification": "<one sentence>"
-  }},
-  "semantics": {{
-    "score": <integer 0-10>,
-    "justification": "<one sentence>"
-  }},
-  "overall_comment": "<two sentences summarizing the answer quality>"
+  "score": <integer 0-10>,
+  "rationale": "<2-3 sentences explaining the score>",
+  "strengths": ["<strength 1>", "<strength 2>"],
+  "gaps": ["<gap 1>", "<gap 2>"]
 }}
 
-Scoring guide:
-- Relevance: How directly does the answer address what was asked? 0=completely off-topic, 10=directly on point
-- Context: Does the answer show understanding of the business/domain context? 0=no context awareness, 10=excellent domain insight
-- Semantics: How closely does the meaning align with the reference answer? 0=contradicts, 10=fully aligned
-
-Be fair and objective. If no answer was provided, score 0 across all dimensions."""
+Scoring: 0=no attempt, 1-3=poor, 4-6=adequate, 7-8=good, 9-10=excellent.
+If no answer, score 0. Be specific and constructive in strengths and gaps."""
 
     try:
         message = client.messages.create(
             model=settings.llm_model,
             max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
         )
         raw = message.content[0].text.strip()
-        # Strip markdown code fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         result = json.loads(raw.strip())
+        result["pending_review"] = False
         return result
     except Exception as e:
-        # Fallback zero scores on error
         return {
-            "relevance": {"score": 0, "justification": f"Evaluation error: {str(e)}"},
-            "context": {"score": 0, "justification": "Evaluation error"},
-            "semantics": {"score": 0, "justification": "Evaluation error"},
-            "overall_comment": f"Automated evaluation failed: {str(e)}",
+            "score": None,
+            "rationale": f"Automated evaluation failed: {str(e)}",
+            "strengths": [],
+            "gaps": [],
+            "pending_review": True,
             "error": str(e),
         }
 
@@ -146,17 +134,22 @@ def evaluate_seg3(
             scenario_text=question.scenario_text,
         )
 
-        # Weighted composite per question
-        r = llm_result.get("relevance", {}).get("score", 0)
-        c = llm_result.get("context", {}).get("score", 0)
-        s = llm_result.get("semantics", {}).get("score", 0)
-        q_score = (r * relevance_weight + c * context_weight + s * semantics_weight) / 10 * 100
+        # Handle pending review case
+        if llm_result.get("pending_review"):
+            q_score = 0.0
+        else:
+            raw_score = llm_result.get("score") or 0
+            q_score = (raw_score / 10) * 100
 
         details.append({
             "question_id": resp.question_id,
             "scenario_text": question.scenario_text[:200] + "...",
             "candidate_answer": resp.free_text_response,
-            "llm_evaluation": llm_result,
+            "score": llm_result.get("score"),
+            "rationale": llm_result.get("rationale", ""),
+            "strengths": llm_result.get("strengths", []),
+            "gaps": llm_result.get("gaps", []),
+            "pending_review": llm_result.get("pending_review", False),
             "question_score": round(q_score, 2),
         })
         total_score += q_score

@@ -382,3 +382,215 @@ def _upsert_responses(db: Session, session_id: int, segment: int, responses: lis
             )
             db.add(new_resp)
     db.commit()
+
+# ─── PROCTOR EVENT LOGGING ───
+@router.post("/proctor-event/{session_token}")
+async def log_proctor_event(
+    session_token: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    session = _get_session_or_404(db, session_token)
+    event_type = payload.get("event_type", "unknown")
+    details = payload.get("details", "")
+
+    db.add(models.ProctorEvent(
+        session_id=session.id,
+        event_type=event_type,
+        details=str(details),
+    ))
+
+    # Count violations and update session
+    violation_types = ["tab_switch", "fullscreen_exit", "gaze_away", "paste_attempt"]
+    if event_type in violation_types:
+        session.violation_count = (session.violation_count or 0) + 1
+
+    # Auto-terminate logic
+    tab_violations = db.query(models.ProctorEvent).filter_by(
+        session_id=session.id, event_type="tab_switch"
+    ).count()
+    gaze_violations = db.query(models.ProctorEvent).filter_by(
+        session_id=session.id, event_type="gaze_away"
+    ).count()
+
+    should_terminate = (
+        event_type == "terminated_malpractice" or
+        tab_violations >= 3 or
+        gaze_violations >= 3
+    )
+
+    if should_terminate and session.proctoring_status == "active":
+        session.proctoring_status = "terminated"
+        session.status = "SUBMITTED"
+        session.submitted_at = datetime.utcnow()
+        reason = payload.get("reason", "Auto-terminated: violation limit exceeded")
+        session.termination_reason = reason
+
+        # Calculate integrity score
+        total_events = db.query(models.ProctorEvent).filter_by(session_id=session.id).count()
+        integrity = max(0, 100 - (tab_violations * 10) - (gaze_violations * 8) - (session.violation_count * 3))
+        session.integrity_score = min(100, integrity)
+
+        db.commit()
+        return {"terminated": True, "reason": reason}
+
+    db.commit()
+    return {"logged": True, "violation_count": session.violation_count}
+
+
+# ─── WEBCAM PHOTO UPLOAD ───
+@router.post("/webcam-photo/{session_token}")
+async def upload_webcam_photo(
+    session_token: str,
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    session = _get_session_or_404(db, session_token)
+    candidate = session.candidate
+
+    content = await photo.read()
+    if len(content) > 2 * 1024 * 1024:  # 2MB max
+        raise HTTPException(400, "Photo too large.")
+
+    filename = f"webcam_{candidate.reference_code}.jpg"
+    path = os.path.join(settings.upload_dir, "webcam", filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(content)
+
+    candidate.webcam_photo_path = f"webcam/{filename}"
+    db.commit()
+    return {"saved": True, "path": candidate.webcam_photo_path}
+
+
+# ─── TERMINATE SESSION ───
+@router.post("/terminate/{session_token}")
+async def terminate_session(
+    session_token: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    session = _get_session_or_404(db, session_token)
+    if session.status not in ["IN_PROGRESS", "REGISTERED"]:
+        return {"already_done": True}
+
+    reason = payload.get("reason", "Terminated by system")
+    session.proctoring_status = "terminated"
+    session.status = "SUBMITTED"
+    session.submitted_at = datetime.utcnow()
+    session.termination_reason = reason
+
+    # Calculate integrity score
+    tab_count = db.query(models.ProctorEvent).filter_by(
+        session_id=session.id, event_type="tab_switch"
+    ).count()
+    gaze_count = db.query(models.ProctorEvent).filter_by(
+        session_id=session.id, event_type="gaze_away"
+    ).count()
+    paste_count = db.query(models.ProctorEvent).filter_by(
+        session_id=session.id, event_type="paste_attempt"
+    ).count()
+    session.integrity_score = max(0, 100 - tab_count * 10 - gaze_count * 8 - paste_count * 3)
+
+    db.add(models.ProctorEvent(
+        session_id=session.id,
+        event_type="terminated_malpractice",
+        details=reason,
+    ))
+    db.commit()
+    return {"terminated": True}
+
+
+# ─── BULK CANDIDATE IMPORT ───
+@router.post("/bulk-import")
+async def bulk_import_candidates(
+    file: UploadFile = File(...),
+    requisition_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Import candidates from Excel/CSV for in-person assessments.
+    Required columns: full_name, email, mobile, years_of_experience
+    Optional: current_organization, highest_qualification, linkedin_url
+    """
+    import io
+    import pandas as pd
+
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    try:
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"Could not read file: {e}")
+
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    df.dropna(how="all", inplace=True)
+
+    created = []
+    errors = []
+
+    for idx, row in df.iterrows():
+        row_num = idx + 2
+        rv = row.where(pd.notna(row), None).to_dict()
+
+        name = str(rv.get("full_name") or "").strip()
+        email = str(rv.get("email") or "").strip().lower()
+        mobile = str(rv.get("mobile") or rv.get("mobile_number") or "").strip()
+        exp_raw = rv.get("years_of_experience") or rv.get("experience") or 0
+
+        if not name or not email:
+            errors.append({"row": row_num, "error": "full_name and email are required"})
+            continue
+
+        # Skip duplicates
+        if db.query(models.Candidate).filter_by(email=email).first():
+            errors.append({"row": row_num, "error": f"Email {email} already registered"})
+            continue
+
+        try:
+            exp = float(exp_raw) if exp_raw else 0.0
+        except Exception:
+            exp = 0.0
+
+        ref_code = generate_reference_code(db)
+        candidate = models.Candidate(
+            reference_code=ref_code,
+            full_name=name,
+            email=email,
+            mobile=mobile or "N/A",
+            requisition_id=requisition_id,
+            years_of_experience=exp,
+            current_organization=str(rv.get("current_organization") or "").strip() or None,
+            highest_qualification=str(rv.get("highest_qualification") or "").strip() or None,
+            linkedin_url=str(rv.get("linkedin_url") or "").strip() or None,
+        )
+        db.add(candidate)
+        db.flush()
+
+        session_token = secrets.token_urlsafe(32)
+        session = models.AssessmentSession(
+            candidate_id=candidate.id,
+            session_token=session_token,
+            status="REGISTERED",
+        )
+        db.add(session)
+        db.flush()
+
+        created.append({
+            "reference_code": ref_code,
+            "name": name,
+            "email": email,
+            "session_token": session_token,
+        })
+
+    db.commit()
+    return {
+        "created": len(created),
+        "errors": errors,
+        "candidates": created,
+        "message": f"{len(created)} candidate(s) imported. {len(errors)} skipped.",
+    }

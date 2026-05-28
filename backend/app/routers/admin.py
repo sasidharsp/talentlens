@@ -665,3 +665,262 @@ def get_audit_log(
         ],
         "total": total,
     }
+
+# ─────────────── DELETE CANDIDATE (super_admin only) ───────────────
+@router.delete("/candidates/{session_id}")
+def delete_candidate(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_super_admin),
+):
+    session = db.query(models.AssessmentSession).filter_by(id=session_id).first()
+    if not session:
+        raise HTTPException(404, "Session not found.")
+
+    candidate_name = session.candidate.full_name if session.candidate else "Unknown"
+
+    # Delete cascade: responses, evaluation, rounds, status, proctor events, then session, then candidate
+    db.query(models.ProctorEvent).filter_by(session_id=session_id).delete()
+    db.query(models.SegmentResponse).filter_by(session_id=session_id).delete()
+    db.query(models.EvaluationResult).filter_by(session_id=session_id).delete()
+    db.query(models.InterviewRound).filter_by(session_id=session_id).delete()
+    db.query(models.CandidatureStatus).filter_by(session_id=session_id).delete()
+
+    candidate_id = session.candidate_id
+    db.delete(session)
+    db.flush()
+
+    candidate = db.query(models.Candidate).filter_by(id=candidate_id).first()
+    if candidate:
+        db.delete(candidate)
+
+    db.add(models.AuditLog(
+        user_id=current_user.id,
+        action="candidate_deleted",
+        resource="candidate",
+        resource_id=str(session_id),
+        details={"candidate_name": candidate_name},
+    ))
+    db.commit()
+    return {"message": f"Candidate '{candidate_name}' permanently deleted."}
+
+
+# ─────────────── PROCTOR EVENTS ───────────────
+@router.get("/candidates/{session_id}/proctor-events")
+def get_proctor_events(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    events = (
+        db.query(models.ProctorEvent)
+        .filter_by(session_id=session_id)
+        .order_by(models.ProctorEvent.timestamp)
+        .all()
+    )
+    return [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "details": e.details,
+            "timestamp": e.timestamp,
+        }
+        for e in events
+    ]
+
+
+# ─────────────── ANALYTICS ───────────────
+@router.get("/analytics")
+def get_analytics(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    from sqlalchemy import func as sqlfunc, case
+    from datetime import timedelta
+
+    # ── Overall stats ──
+    total = db.query(models.AssessmentSession).count()
+    submitted = db.query(models.AssessmentSession).filter(
+        models.AssessmentSession.status.in_(["SUBMITTED", "EVALUATED"])
+    ).count()
+    evaluated = db.query(models.AssessmentSession).filter_by(status="EVALUATED").count()
+
+    # Scores
+    scores = db.query(models.EvaluationResult.overall_score).filter(
+        models.EvaluationResult.overall_score.isnot(None)
+    ).all()
+    score_values = [s[0] for s in scores]
+    avg_score = round(sum(score_values) / len(score_values), 1) if score_values else 0
+    pass_count = sum(1 for s in score_values if s >= 70)
+    pass_rate = round(pass_count / len(score_values) * 100, 1) if score_values else 0
+
+    # Segment averages
+    seg_avgs = db.query(
+        sqlfunc.avg(models.EvaluationResult.seg1_score),
+        sqlfunc.avg(models.EvaluationResult.seg2_score),
+        sqlfunc.avg(models.EvaluationResult.seg3_score),
+    ).first()
+
+    # Score distribution buckets
+    buckets = {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0}
+    for s in score_values:
+        if s <= 20: buckets["0-20"] += 1
+        elif s <= 40: buckets["21-40"] += 1
+        elif s <= 60: buckets["41-60"] += 1
+        elif s <= 80: buckets["61-80"] += 1
+        else: buckets["81-100"] += 1
+
+    # Candidates by requisition
+    from sqlalchemy.orm import aliased
+    req_counts = (
+        db.query(models.Requisition.req_id, models.Requisition.title, sqlfunc.count(models.Candidate.id))
+        .outerjoin(models.Candidate, models.Candidate.requisition_id == models.Requisition.id)
+        .group_by(models.Requisition.id)
+        .order_by(sqlfunc.count(models.Candidate.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    # Candidates by day (last 30 days)
+    since = datetime.utcnow() - timedelta(days=30)
+    daily = (
+        db.query(
+            sqlfunc.date_trunc("day", models.Candidate.created_at).label("day"),
+            sqlfunc.count(models.Candidate.id).label("count"),
+        )
+        .filter(models.Candidate.created_at >= since)
+        .group_by("day")
+        .order_by("day")
+        .all()
+    )
+
+    # Final status breakdown
+    status_counts = (
+        db.query(models.CandidatureStatus.final_status, sqlfunc.count())
+        .group_by(models.CandidatureStatus.final_status)
+        .all()
+    )
+
+    # Proctoring violations summary
+    violation_counts = (
+        db.query(models.ProctorEvent.event_type, sqlfunc.count())
+        .group_by(models.ProctorEvent.event_type)
+        .all()
+    )
+    terminated_count = db.query(models.AssessmentSession).filter_by(
+        proctoring_status="terminated"
+    ).count()
+
+    return {
+        "overview": {
+            "total": total,
+            "submitted": submitted,
+            "evaluated": evaluated,
+            "avg_score": avg_score,
+            "pass_rate": pass_rate,
+            "terminated_for_malpractice": terminated_count,
+        },
+        "segment_averages": {
+            "seg1": round(seg_avgs[0] or 0, 1),
+            "seg2": round(seg_avgs[1] or 0, 1),
+            "seg3": round(seg_avgs[2] or 0, 1),
+        },
+        "score_distribution": [
+            {"range": k, "count": v} for k, v in buckets.items()
+        ],
+        "by_requisition": [
+            {"req_id": r[0], "title": r[1], "count": r[2]} for r in req_counts
+        ],
+        "daily_registrations": [
+            {"day": str(d[0])[:10], "count": d[1]} for d in daily
+        ],
+        "final_status_breakdown": [
+            {"status": s[0], "count": s[1]} for s in status_counts
+        ],
+        "violation_summary": [
+            {"type": v[0], "count": v[1]} for v in violation_counts
+        ],
+    }
+
+
+# ─────────────── INSTRUCTION VERSIONS ───────────────
+@router.get("/instructions/{instruction_type}")
+def get_instructions(
+    instruction_type: str,
+    db: Session = Depends(get_db),
+):
+    """Get latest active instruction version. Public — used by candidate portal."""
+    latest = (
+        db.query(models.InstructionVersion)
+        .filter_by(instruction_type=instruction_type, is_active=True)
+        .order_by(models.InstructionVersion.id.desc())
+        .first()
+    )
+    if not latest:
+        # Fall back to SystemConfig
+        cfg = db.query(models.SystemConfig).filter_by(key=f"{instruction_type}_content").first()
+        return {"content": cfg.value if cfg else "", "version": None, "updated_at": None}
+    return {
+        "content": latest.content,
+        "version": latest.id,
+        "updated_at": latest.created_at,
+        "created_by": latest.creator.full_name if latest.creator else "System",
+    }
+
+
+@router.post("/instructions/{instruction_type}")
+def save_instructions(
+    instruction_type: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Save a new version of instructions."""
+    content = payload.get("content", "")
+    if not content.strip():
+        raise HTTPException(400, "Content cannot be empty.")
+
+    # Deactivate previous versions
+    db.query(models.InstructionVersion).filter_by(
+        instruction_type=instruction_type
+    ).update({"is_active": False})
+
+    version = models.InstructionVersion(
+        instruction_type=instruction_type,
+        content=content,
+        created_by=current_user.id,
+        is_active=True,
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    return {
+        "message": "Instructions saved.",
+        "version": version.id,
+        "updated_at": version.created_at,
+    }
+
+
+@router.get("/instructions/{instruction_type}/history")
+def get_instruction_history(
+    instruction_type: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    versions = (
+        db.query(models.InstructionVersion)
+        .filter_by(instruction_type=instruction_type)
+        .order_by(models.InstructionVersion.id.desc())
+        .limit(10)
+        .all()
+    )
+    return [
+        {
+            "id": v.id,
+            "created_at": v.created_at,
+            "created_by": v.creator.full_name if v.creator else "System",
+            "is_active": v.is_active,
+            "preview": v.content[:100] + "..." if len(v.content) > 100 else v.content,
+        }
+        for v in versions
+    ]

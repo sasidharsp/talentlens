@@ -53,8 +53,15 @@ def seed_defaults():
         migrations = [
             # Add requisition_id column if not present
             "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS requisition_id INTEGER REFERENCES requisitions(id)",
-            # Make role_id nullable — was NOT NULL in original schema, now optional since requisitions introduced
+            # Make role_id nullable
             "ALTER TABLE candidates ALTER COLUMN role_id DROP NOT NULL",
+            # New columns on candidates
+            "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS webcam_photo_path VARCHAR(500)",
+            # New columns on assessment_sessions
+            "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS proctoring_status VARCHAR(30) DEFAULT 'active'",
+            "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS integrity_score FLOAT",
+            "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS violation_count INTEGER DEFAULT 0",
+            "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS termination_reason VARCHAR(200)",
         ]
         for sql in migrations:
             try:

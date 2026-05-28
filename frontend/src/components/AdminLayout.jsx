@@ -2,11 +2,12 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase
+  LogOut, Zap, Briefcase, BarChart2
 } from 'lucide-react';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart2 },
   { to: '/admin/candidates', label: 'Candidates', icon: Users },
   { to: '/admin/requisitions', label: 'Requisitions', icon: Briefcase },
   { to: '/admin/questions', label: 'Question Bank', icon: BookOpen },

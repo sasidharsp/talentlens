@@ -103,6 +103,7 @@ class Candidate(Base):
     linkedin_url = Column(String(500), nullable=True)
     resume_path = Column(String(500), nullable=True)
     resume_original_name = Column(String(255), nullable=True)
+    webcam_photo_path = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     role = relationship("RoleConfig")
@@ -126,6 +127,10 @@ class AssessmentSession(Base):
     seg3_start_time = Column(DateTime(timezone=True), nullable=True)
     seg3_end_time = Column(DateTime(timezone=True), nullable=True)
     submitted_at = Column(DateTime(timezone=True), nullable=True)
+    proctoring_status = Column(String(30), default="active")  # active|completed|terminated
+    integrity_score = Column(Float, nullable=True)
+    violation_count = Column(Integer, default=0)
+    termination_reason = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     candidate = relationship("Candidate", back_populates="sessions")
@@ -256,6 +261,31 @@ class CandidatureStatus(Base):
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     session = relationship("AssessmentSession", back_populates="status_record")
+
+
+# ─────────────────────────── PROCTORING ───────────────────────────
+class ProctorEvent(Base):
+    __tablename__ = "proctor_events"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("assessment_sessions.id"), nullable=False)
+    event_type = Column(String(50), nullable=False)
+    # tab_switch | fullscreen_exit | gaze_away | paste_attempt | shortcut_attempt
+    # right_click | webcam_error | terminated_malpractice | session_start
+    details = Column(Text, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    session = relationship("AssessmentSession")
+
+
+# ─────────────────────────── INSTRUCTION VERSIONS ───────────────────────────
+class InstructionVersion(Base):
+    __tablename__ = "instruction_versions"
+    id = Column(Integer, primary_key=True, index=True)
+    instruction_type = Column(String(50), nullable=False)  # pre_assessment | post_completion
+    content = Column(Text, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_active = Column(Boolean, default=True)
+    creator = relationship("User")
 
 
 # ─────────────────────────── AUDIT LOG ───────────────────────────

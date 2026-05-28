@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../api/client';
 import { downloadFile } from '../../api/download';
 import { Save, AlertCircle, CheckCircle2, Download, Database, FolderArchive, Shield } from 'lucide-react';
+import InstructionEditor from './InstructionEditor';
 
 const GROUPS = {
   'Assessment Counts': ['seg1_question_count','seg2_question_count','seg3_question_count'],
@@ -151,6 +152,23 @@ export default function Settings() {
               Backup downloads are restricted to Super Admin only and are recorded in the audit log.
             </div>
           </div>
+        </div>
+
+        {/* ── Assessment Instructions ── */}
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize: 20, color: 'var(--text)', marginBottom: 16 }}>
+            Assessment Instructions
+          </div>
+          <InstructionEditor
+            type="pre_assessment"
+            title="Pre-Assessment Instructions"
+            description="Shown to candidates on the Instructions page before they begin the assessment"
+          />
+          <InstructionEditor
+            type="post_completion"
+            title="Post-Completion Message"
+            description="Shown to candidates on the Thank You page after they submit"
+          />
         </div>
       </div>
     </div>
