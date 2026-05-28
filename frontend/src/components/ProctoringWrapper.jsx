@@ -60,7 +60,11 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
         if (videoRef.current) videoRef.current.srcObject = stream;
       } catch (e) {
         setWebcamError(true);
-        logEvent('webcam_error', 'Camera access denied or unavailable');
+        // No camera is not a violation — log informational only, don't count against candidate
+        api.post(`/candidate/proctor-event/${token}`, {
+          event_type: 'webcam_error',
+          details: 'Camera unavailable or permission denied — proctoring continues without video',
+        }).catch(() => {});
       }
     };
     initWebcam();
@@ -233,33 +237,42 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
     <div style={{ position: 'relative' }}>
       {children}
 
-      {/* Webcam overlay — top right, pointer-events:none so it never blocks clicks */}
-      <div style={{
-        position: 'fixed', top: 70, right: 16, zIndex: 9999,
-        borderRadius: 10, overflow: 'hidden',
-        border: '2px solid var(--border)', boxShadow: 'var(--shadow-md)',
-        background: '#000', width: 120, height: 90,
-        pointerEvents: 'none',
-      }}>
-        {webcamError ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 4 }}>
-            <EyeOff size={18} color="#fff" />
-            <span style={{ color: '#fff', fontSize: 9 }}>No camera</span>
+      {/* Webcam overlay — bottom LEFT, away from Prev/Next buttons (bottom right) */}
+      {!webcamError && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: 16, zIndex: 9999,
+          borderRadius: 10, overflow: 'hidden',
+          border: '2px solid rgba(0,0,0,0.3)', boxShadow: 'var(--shadow-md)',
+          background: '#000', width: 110, height: 80,
+          pointerEvents: 'none',
+        }}>
+          <video ref={videoRef} autoPlay muted playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+          <div style={{ position: 'absolute', top: 3, left: 3, background: 'rgba(0,0,0,0.6)', borderRadius: 4, padding: '2px 5px', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Shield size={8} color={violations.tab + violations.gaze > 0 ? '#FBBF24' : '#34D399'} />
+            <span style={{ fontSize: 8, color: '#fff', fontWeight: 600 }}>LIVE</span>
           </div>
-        ) : (
-          <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
-        )}
-        <div style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', borderRadius: 4, padding: '2px 5px', display: 'flex', alignItems: 'center', gap: 3 }}>
-          <Shield size={9} color={violations.tab + violations.gaze > 0 ? '#FBBF24' : '#34D399'} />
-          <span style={{ fontSize: 8, color: '#fff', fontWeight: 600 }}>LIVE</span>
         </div>
-      </div>
+      )}
 
-      {/* Violation counter — below webcam, also non-interactive */}
+      {/* No-camera badge — shown instead of video when camera unavailable */}
+      {webcamError && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: 16, zIndex: 9999,
+          background: 'rgba(0,0,0,0.55)', borderRadius: 8,
+          padding: '5px 10px', pointerEvents: 'none',
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}>
+          <EyeOff size={12} color="#9CA3AF" />
+          <span style={{ fontSize: 10, color: '#9CA3AF' }}>No camera</span>
+        </div>
+      )}
+
+      {/* Violation counter — above webcam, bottom-left */}
       <div style={{
-        position: 'fixed', top: 168, right: 16, zIndex: 9999,
+        position: 'fixed', bottom: 168, left: 16, zIndex: 9999,
         background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 8, padding: '5px 10px', fontSize: 11,
+        borderRadius: 8, padding: '5px 10px',
         boxShadow: 'var(--shadow-sm)', pointerEvents: 'none',
       }}>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -272,7 +285,7 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
         </div>
       </div>
 
-      {/* Warning toast — also non-interactive */}
+      {/* Warning toast — centre top, non-interactive */}
       {warning && (
         <div style={{
           position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',

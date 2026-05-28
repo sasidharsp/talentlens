@@ -1,0 +1,6 @@
+node_modules
+dist
+.git
+*.md
+nginx.local.conf
+nginx.conf.template
