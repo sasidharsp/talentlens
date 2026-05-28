@@ -230,44 +230,49 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
   }
 
   return (
-    <div style={{ position: 'relative', userSelect: 'none' }}>
+    <div style={{ position: 'relative' }}>
       {children}
 
-      {/* Webcam overlay */}
+      {/* Webcam overlay — top right, pointer-events:none so it never blocks clicks */}
       <div style={{
-        position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
-        borderRadius: 12, overflow: 'hidden',
+        position: 'fixed', top: 70, right: 16, zIndex: 9999,
+        borderRadius: 10, overflow: 'hidden',
         border: '2px solid var(--border)', boxShadow: 'var(--shadow-md)',
-        background: '#000', width: 140, height: 100,
+        background: '#000', width: 120, height: 90,
+        pointerEvents: 'none',
       }}>
         {webcamError ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6 }}>
-            <EyeOff size={20} color="#fff" />
-            <span style={{ color: '#fff', fontSize: 10 }}>No camera</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 4 }}>
+            <EyeOff size={18} color="#fff" />
+            <span style={{ color: '#fff', fontSize: 9 }}>No camera</span>
           </div>
         ) : (
           <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
         )}
-        {/* Integrity indicator */}
-        <div style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', borderRadius: 4, padding: '2px 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Shield size={10} color={violations.tab + violations.gaze > 0 ? '#FBBF24' : '#34D399'} />
-          <span style={{ fontSize: 9, color: '#fff', fontWeight: 600 }}>LIVE</span>
+        <div style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', borderRadius: 4, padding: '2px 5px', display: 'flex', alignItems: 'center', gap: 3 }}>
+          <Shield size={9} color={violations.tab + violations.gaze > 0 ? '#FBBF24' : '#34D399'} />
+          <span style={{ fontSize: 8, color: '#fff', fontWeight: 600 }}>LIVE</span>
         </div>
       </div>
 
-      {/* Violation counter */}
-      <div style={{ position: 'fixed', bottom: 128, right: 20, zIndex: 9999, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', fontSize: 11, boxShadow: 'var(--shadow-sm)' }}>
+      {/* Violation counter — below webcam, also non-interactive */}
+      <div style={{
+        position: 'fixed', top: 168, right: 16, zIndex: 9999,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 8, padding: '5px 10px', fontSize: 11,
+        boxShadow: 'var(--shadow-sm)', pointerEvents: 'none',
+      }}>
         <div style={{ display: 'flex', gap: 10 }}>
           {[['Tab', violations.tab, MAX_TAB_VIOLATIONS], ['Gaze', violations.gaze, MAX_GAZE_VIOLATIONS]].map(([label, count, max]) => (
             <div key={label} style={{ textAlign: 'center' }}>
-              <div style={{ fontWeight: 700, color: count > 0 ? 'var(--danger)' : 'var(--success)', fontSize: 14 }}>{count}/{max}</div>
+              <div style={{ fontWeight: 700, color: count > 0 ? 'var(--danger)' : 'var(--success)', fontSize: 13 }}>{count}/{max}</div>
               <div style={{ color: 'var(--text-3)', fontSize: 9 }}>{label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Warning toast */}
+      {/* Warning toast — also non-interactive */}
       {warning && (
         <div style={{
           position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
@@ -275,7 +280,7 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
           borderRadius: 10, fontSize: 14, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)', zIndex: 99999,
           display: 'flex', alignItems: 'center', gap: 8, maxWidth: 480,
-          animation: 'page-fade 0.2s ease',
+          pointerEvents: 'none',
         }}>
           <AlertTriangle size={18} color="#FBBF24" />
           {warning}
