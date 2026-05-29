@@ -117,7 +117,7 @@ def list_candidates(
             "years_of_experience": candidate.years_of_experience,
             "submitted_at": session.submitted_at,
             "registered_at": candidate.created_at,
-            "ai_verdict": (evaluation.ai_recommendation or {}).get("recommendation") if evaluation else None,
+            "ai_verdict": evaluation.ai_recommendation.get("recommendation") if evaluation and evaluation.ai_recommendation else None,
             "status": session.status,
             "overall_score": evaluation.overall_score if evaluation else None,
             "final_status": cs.final_status if cs else "pending",
