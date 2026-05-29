@@ -10,6 +10,8 @@ services:
       POSTGRES_DB: talentlens
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"   # expose for local DB tools (TablePlus, DBeaver etc)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -24,20 +26,23 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:talentlens@db:5432/talentlens
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-long-random-string}
+      SECRET_KEY: ${SECRET_KEY:-local-dev-secret-key-change-in-prod}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       UPLOAD_DIR: /app/uploads
-      ENVIRONMENT: ${ENVIRONMENT:-production}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      ENVIRONMENT: development
+      FRONTEND_URL: http://localhost
     volumes:
       - uploads:/app/uploads
+      - ./backend/app:/app/app   # hot-reload: local code changes apply instantly
     ports:
-      - "8000:8000"   # expose directly for dev; remove in prod
+      - "8000:8000"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000   # points to local backend
     restart: always
     depends_on:
       - backend

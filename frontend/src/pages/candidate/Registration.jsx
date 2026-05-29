@@ -89,9 +89,7 @@ export default function Registration() {
                   <input className="input" required value={form.mobile} onChange={e=>set('mobile',e.target.value)} placeholder="+91 98765 43210" />
                 </div>
                 <div>
-                  <label className="label">
-                    Years of Experience <span style={{color:'var(--danger)'}}>*</span>
-                     </label>
+                  <label className="label">Years of Experience <span style={{color:'var(--danger)'}}>*</span></label>
                   <input type="number" className="input" required min="0" max="50" step="0.5"
                     value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)} placeholder="e.g. 4.5" />
                 </div>
