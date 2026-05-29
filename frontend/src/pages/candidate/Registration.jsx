@@ -91,8 +91,7 @@ export default function Registration() {
                 <div>
                   <label className="label">
                     Years of Experience <span style={{color:'var(--danger)'}}>*</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>— sizes question difficulty</span>
-                  </label>
+                     </label>
                   <input type="number" className="input" required min="0" max="50" step="0.5"
                     value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)} placeholder="e.g. 4.5" />
                 </div>
