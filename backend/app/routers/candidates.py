@@ -477,18 +477,40 @@ async def upload_webcam_photo(
     candidate = session.candidate
 
     content = await photo.read()
-    if len(content) > 2 * 1024 * 1024:  # 2MB max
+    if len(content) > 2 * 1024 * 1024:
         raise HTTPException(400, "Photo too large.")
 
-    filename = f"webcam_{candidate.reference_code}.jpg"
-    path = os.path.join(settings.upload_dir, "webcam", filename)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
-        f.write(content)
+    # Upload to Cloudinary if configured, else fall back to local storage
+    if settings.cloudinary_url:
+        import cloudinary
+        import cloudinary.uploader
+        import io
 
-    candidate.webcam_photo_path = f"webcam/{filename}"
+        cloudinary.config(cloudinary_url=settings.cloudinary_url)
+        result = cloudinary.uploader.upload(
+            io.BytesIO(content),
+            folder="talentlens/webcam",
+            public_id=f"webcam_{candidate.reference_code}",
+            resource_type="image",
+            overwrite=True,
+            transformation=[
+                {"width": 400, "height": 300, "crop": "fill", "gravity": "face"},
+                {"quality": "auto", "fetch_format": "auto"},
+            ],
+        )
+        photo_url = result["secure_url"]
+    else:
+        # Local fallback (not persistent on Railway)
+        filename = f"webcam_{candidate.reference_code}.jpg"
+        path = os.path.join(settings.upload_dir, "webcam", filename)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(content)
+        photo_url = f"webcam/{filename}"
+
+    candidate.webcam_photo_path = photo_url
     db.commit()
-    return {"saved": True, "path": candidate.webcam_photo_path}
+    return {"saved": True, "url": photo_url}
 
 
 # ─── TERMINATE SESSION ───

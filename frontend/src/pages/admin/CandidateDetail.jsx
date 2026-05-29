@@ -823,7 +823,9 @@ export default function CandidateDetail() {
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Identity Photo</div>
                   <img
-                    src={`/uploads/${candidate.webcam_photo_path}`}
+                    src={candidate.webcam_photo_path.startsWith('http')
+                      ? candidate.webcam_photo_path
+                      : `/uploads/${candidate.webcam_photo_path}`}
                     alt="Candidate photo"
                     style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }}
                     onError={e => e.target.style.display = 'none'}
