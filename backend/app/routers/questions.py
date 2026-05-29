@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import models, schemas
-from app.auth import require_admin
+from app.auth import require_admin, require_super_admin, require_questions
 
 router = APIRouter(prefix="/api/admin/questions", tags=["questions"])
 
@@ -312,9 +312,9 @@ def template_seg1(current_user=Depends(require_admin)):
 @router.get("/seg1")
 def list_seg1(
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
-    difficulty: Optional[str] = None, category: Optional[str] = None,
-    search: Optional[str] = None,
-    db: Session = Depends(get_db), current_user=Depends(require_admin),
+    difficulty: Optional[str] = None, batch_tag: Optional[str] = None,
+    category: Optional[str] = None, search: Optional[str] = None,
+    db: Session = Depends(get_db), current_user=Depends(require_questions),
 ):
     q = db.query(models.QuestionSeg1).filter(models.QuestionSeg1.is_active == True)
     if batch_tag: q = q.filter(models.QuestionSeg1.batch_tag == batch_tag)
@@ -420,8 +420,9 @@ def template_seg2(current_user=Depends(require_admin)):
 @router.get("/seg2")
 def list_seg2(
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
-    difficulty: Optional[str] = None, search: Optional[str] = None,
-    db: Session = Depends(get_db), current_user=Depends(require_admin),
+    difficulty: Optional[str] = None, batch_tag: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db), current_user=Depends(require_questions),
 ):
     q = db.query(models.QuestionSeg2).filter(models.QuestionSeg2.is_active == True)
     if batch_tag: q = q.filter(models.QuestionSeg2.batch_tag == batch_tag)
@@ -523,8 +524,8 @@ def template_seg3(current_user=Depends(require_admin)):
 @router.get("/seg3")
 def list_seg3(
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = None,
-    db: Session = Depends(get_db), current_user=Depends(require_admin),
+    search: Optional[str] = None, batch_tag: Optional[str] = None,
+    db: Session = Depends(get_db), current_user=Depends(require_questions),
 ):
     q = db.query(models.QuestionSeg3).filter(models.QuestionSeg3.is_active == True)
     if batch_tag: q = q.filter(models.QuestionSeg3.batch_tag == batch_tag)
