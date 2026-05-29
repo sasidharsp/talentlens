@@ -342,6 +342,11 @@ export default function CandidateDetail() {
               {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Evaluating…</> : <><Zap size={14} />Run AI Evaluation</>}
             </button>
           )}
+          {(session?.status === 'EVALUATED' || evaluation) && isAdmin && (
+            <button className="btn btn-secondary btn-sm" onClick={triggerEval} disabled={evaluating} title="Re-run evaluation — use after fixing API key or uploading new questions">
+              {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Re-evaluating…</> : <><Zap size={14} />Re-evaluate</>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -353,7 +358,7 @@ export default function CandidateDetail() {
               {[
                 { label: 'Segment 1 — Knowledge', score: evaluation.seg1_score, detail: `${evaluation.seg1_correct}/${evaluation.seg1_total} correct` },
                 { label: 'Segment 2 — Role Fit', score: evaluation.seg2_score, detail: `${evaluation.seg2_correct}/${evaluation.seg2_total} correct` },
-                { label: 'Segment 3 — Scenario', score: evaluation.seg3_score, detail: 'AI scored' },
+                { label: 'Segment 3 — Scenario', score: evaluation.seg3_score, detail: (() => { const d = evaluation.seg3_details || []; if (!d.length) return 'No responses'; const p = d.filter(x => x.pending_review).length; if (p === d.length) return '⚠️ Pending Manual Review — check API key'; if (p) return `${d.length - p} AI scored, ${p} pending`; return 'AI scored'; })() },
                 { label: 'Overall Score', score: evaluation.overall_score, bold: true },
               ].map(({ label, score, detail, bold }) => (
                 <div key={label}>

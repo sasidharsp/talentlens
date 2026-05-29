@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Anthropic LLM
     anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-4-20250514"
+    llm_model: str = "claude-sonnet-4-5"
 
     # File uploads
     upload_dir: str = "/app/uploads"
