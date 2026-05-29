@@ -37,7 +37,7 @@ export default function ThankYou() {
             <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>What happens next?</span>
           </div>
           <ul style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 2, textAlign: 'left', paddingLeft: 16 }}>
-            <li>AI evaluation of your responses is underway</li>
+            <li>Your responses have been recorded</li>
             <li>The hiring team will review your results</li>
             <li>You will be contacted via email if shortlisted</li>
           </ul>

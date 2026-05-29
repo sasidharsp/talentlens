@@ -47,18 +47,27 @@ def evaluate_scenario_with_llm(
     reference_answer: str,
     scenario_text: str,
     question_prompt: str = "",
+    role_context: str = "",
 ) -> Dict[str, Any]:
     """
     Use Claude to evaluate a scenario response.
+    role_context: e.g. "Senior Java Developer (BFSI) — Spring Boot, Microservices, Kafka"
     Returns: { score, rationale, strengths, gaps, pending_review }
     On failure: marks as pending_review instead of erroring out.
     """
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    system_prompt = "You are an expert BFSI assessor evaluating candidate responses for professional roles."
+    role_section = f"""
+ROLE CONTEXT
+The candidate is applying for: {role_context}
+Evaluate their answer specifically against what someone in this role should know and demonstrate.
+Adjust your scoring benchmark accordingly — a senior role demands more depth, precision, and domain expertise.
+""" if role_context else ""
+
+    system_prompt = f"You are an expert BFSI assessor evaluating candidate responses for professional roles.{(' The role being assessed is: ' + role_context + '.') if role_context else ''}"
 
     user_prompt = f"""Evaluate the candidate's answer against the ideal answer and rubric provided.
-
+{role_section}
 Scenario: {scenario_text}
 
 Question: {question_prompt or "Respond to the scenario above."}
@@ -70,13 +79,14 @@ Candidate Answer: {candidate_answer if candidate_answer else "[No answer provide
 Return ONLY valid JSON in this exact format:
 {{
   "score": <integer 0-10>,
-  "rationale": "<2-3 sentences explaining the score>",
+  "rationale": "<2-3 sentences explaining the score in context of the role>",
   "strengths": ["<strength 1>", "<strength 2>"],
   "gaps": ["<gap 1>", "<gap 2>"]
 }}
 
 Scoring: 0=no attempt, 1-3=poor, 4-6=adequate, 7-8=good, 9-10=excellent.
-If no answer, score 0. Be specific and constructive in strengths and gaps."""
+Score relative to what is expected for {role_context or "a BFSI professional"}.
+Be specific — name the exact concepts, tools, or approaches that were present or missing."""
 
     try:
         message = client.messages.create(
@@ -107,11 +117,9 @@ If no answer, score 0. Be specific and constructive in strengths and gaps."""
 def evaluate_seg3(
     db: Session,
     session_id: int,
-    relevance_weight: float = 0.33,
-    context_weight: float = 0.33,
-    semantics_weight: float = 0.34,
+    role_context: str = "",
 ) -> Dict[str, Any]:
-    """Evaluate all Segment 3 responses using LLM."""
+    """Evaluate all Segment 3 responses using LLM with role context."""
     responses = db.query(models.SegmentResponse).filter(
         models.SegmentResponse.session_id == session_id,
         models.SegmentResponse.segment_number == 3,
@@ -132,6 +140,7 @@ def evaluate_seg3(
             candidate_answer=resp.free_text_response or "",
             reference_answer=question.reference_answer,
             scenario_text=question.scenario_text,
+            role_context=role_context,
         )
 
         # Handle pending review case
@@ -177,12 +186,28 @@ def run_full_evaluation(db: Session, session_id: int, evaluator_user_id: Optiona
     w2 = get_weight("score_weight_seg2", 0.40)
     w3 = get_weight("score_weight_seg3", 0.30)
 
+    # Build role context for Level 2 contextualised evaluation
+    session = db.query(models.AssessmentSession).filter_by(id=session_id).first()
+    role_context = ""
+    if session and session.candidate:
+        candidate = session.candidate
+        if candidate.requisition:
+            req = candidate.requisition
+            parts = [f"{req.title}"]
+            if req.department: parts.append(req.department)
+            if req.description: parts.append(req.description[:300])
+            role_context = " — ".join(parts)
+        elif candidate.role:
+            role_context = candidate.role.name
+        if candidate.years_of_experience:
+            role_context += f" ({candidate.years_of_experience} years experience)"
+
     # Segment 1
     seg1 = score_mcq_segment(db, session_id, 1, models.QuestionSeg1)
     # Segment 2
     seg2 = score_mcq_segment(db, session_id, 2, models.QuestionSeg2)
-    # Segment 3
-    seg3_result = evaluate_seg3(db, session_id)
+    # Segment 3 — with role context
+    seg3_result = evaluate_seg3(db, session_id, role_context=role_context)
 
     overall = (
         seg1["score"] * w1 +

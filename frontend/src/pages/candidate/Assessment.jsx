@@ -199,7 +199,6 @@ export default function Assessment() {
                         value={ans.free_text_response || ''}
                         onChange={e => setAnswer(q.id, { free_text_response: e.target.value })}
                         style={{ minHeight: 200 }} />
-                      <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>Aim for a thorough, structured response. The AI evaluates relevance, context, and reasoning.</div>
                     </div>
                   </>
                 )}
