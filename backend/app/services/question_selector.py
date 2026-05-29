@@ -36,15 +36,33 @@ def get_config_str(db: Session, key: str, default: str) -> str:
     return cfg.value if cfg else default
 
 
-def select_seg1_questions(db: Session, years_of_experience: float) -> List[models.QuestionSeg1]:
+def select_seg1_questions(db: Session, years_of_experience: Optional[float]) -> List[models.QuestionSeg1]:
     """
-    Select Segment 1 questions based on experience bracket.
-    Respects difficulty mix from system config.
+    Select Segment 1 questions.
+    - No experience (0 or None) → all Hard questions
+    - Experience provided → use config difficulty mix scaled by experience
     """
     total = get_config_int(db, "seg1_question_count", 15)
-    high_count = get_config_int(db, "seg1_difficulty_high", 3)
-    medium_count = get_config_int(db, "seg1_difficulty_medium", 7)
-    low_count = get_config_int(db, "seg1_difficulty_low", 5)
+    exp = years_of_experience or 0
+
+    if exp == 0:
+        # No experience → all Hard
+        high_count, medium_count, low_count = total, 0, 0
+    elif exp <= 2:
+        # Junior → mostly easy/medium
+        high_count  = get_config_int(db, "seg1_difficulty_high", 3)
+        medium_count = get_config_int(db, "seg1_difficulty_medium", 7)
+        low_count   = total - high_count - medium_count
+    elif exp <= 5:
+        # Mid → balanced (config defaults)
+        high_count  = get_config_int(db, "seg1_difficulty_high", 3)
+        medium_count = get_config_int(db, "seg1_difficulty_medium", 7)
+        low_count   = get_config_int(db, "seg1_difficulty_low", 5)
+    else:
+        # Senior 6+ → skew hard
+        high_count  = min(total, get_config_int(db, "seg1_difficulty_high", 3) + 3)
+        medium_count = max(0, total - high_count - 2)
+        low_count   = max(0, total - high_count - medium_count)
 
     bracket = get_experience_bracket(db, years_of_experience)
     bracket_id = bracket.id if bracket else None

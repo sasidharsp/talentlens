@@ -485,19 +485,49 @@ export default function CandidateDetail() {
                           </div>
                         ) : (
                           <div>
-                            <div style={{ fontSize: 13, color: 'var(--text)', background: 'var(--surface-2)', borderRadius: 8, padding: '10px 14px', marginBottom: 8, lineHeight: 1.6 }}>
-                              {r.free_text_response || <em style={{ color: 'var(--text-3)' }}>No response</em>}
+                            <div style={{ fontSize: 13, color: 'var(--text)', background: 'var(--surface-2)', borderRadius: 8, padding: '10px 14px', marginBottom: 10, lineHeight: 1.6 }}>
+                              {r.free_text_response || <em style={{ color: 'var(--text-3)' }}>No response provided</em>}
                             </div>
-                            {evaluation?.seg3_details?.find(d => d.question_id === r.question_id) && (() => {
-                              const det = evaluation.seg3_details.find(d => d.question_id === r.question_id);
+                            {(() => {
+                              const det = evaluation?.seg3_details?.find(d => d.question_id === r.question_id);
+                              if (!det) return null;
+                              if (det.pending_review) return (
+                                <div style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: 'var(--warning)', display: 'flex', gap: 8 }}>
+                                  <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                                  <div>
+                                    <strong>Pending Manual Review</strong> — AI evaluation failed. Please score this response manually.
+                                    {det.rationale && <div style={{ marginTop: 4, fontSize: 12 }}>{det.rationale}</div>}
+                                  </div>
+                                </div>
+                              );
                               return (
-                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                  {['relevance', 'context', 'semantics'].map(k => det[k] != null && (
-                                    <div key={k} style={{ background: 'var(--primary-light)', border: '1px solid var(--primary-border)', borderRadius: 8, padding: '6px 12px', textAlign: 'center' }}>
-                                      <div style={{ fontSize: 11, color: 'var(--primary)', textTransform: 'capitalize', fontWeight: 600 }}>{k}</div>
-                                      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)' }}>{det[k]}/10</div>
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                                    <div style={{ background: 'var(--primary-light)', border: '1px solid var(--primary-border)', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
+                                      <div style={{ fontSize: 10, color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>AI Score</div>
+                                      <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)' }}>{det.score ?? '—'}<span style={{ fontSize: 12, fontWeight: 400 }}>/10</span></div>
                                     </div>
-                                  ))}
+                                    {det.rationale && (
+                                      <div style={{ flex: 1, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 8 }}>
+                                        <strong style={{ color: 'var(--text)', display: 'block', marginBottom: 3 }}>Assessment</strong>
+                                        {det.rationale}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    {det.strengths?.length > 0 && (
+                                      <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', borderRadius: 8, padding: '10px 12px' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>✓ Strengths</div>
+                                        {det.strengths.map((s, i) => <div key={i} style={{ fontSize: 12, color: '#065F46', lineHeight: 1.5, marginBottom: 2 }}>• {s}</div>)}
+                                      </div>
+                                    )}
+                                    {det.gaps?.length > 0 && (
+                                      <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: 8, padding: '10px 12px' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>✗ Gaps</div>
+                                        {det.gaps.map((g, i) => <div key={i} style={{ fontSize: 12, color: '#991B1B', lineHeight: 1.5, marginBottom: 2 }}>• {g}</div>)}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })()}

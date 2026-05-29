@@ -295,7 +295,7 @@ def list_seg1(
     search: Optional[str] = None,
     db: Session = Depends(get_db), current_user=Depends(require_admin),
 ):
-    q = db.query(models.QuestionSeg1)
+    q = db.query(models.QuestionSeg1).filter(models.QuestionSeg1.is_active == True)
     if difficulty: q = q.filter(models.QuestionSeg1.difficulty == difficulty)
     if category:   q = q.filter(models.QuestionSeg1.category == category)
     if search:     q = q.filter(models.QuestionSeg1.question_text.ilike(f"%{search}%"))
@@ -401,7 +401,7 @@ def list_seg2(
     difficulty: Optional[str] = None, search: Optional[str] = None,
     db: Session = Depends(get_db), current_user=Depends(require_admin),
 ):
-    q = db.query(models.QuestionSeg2)
+    q = db.query(models.QuestionSeg2).filter(models.QuestionSeg2.is_active == True)
     if difficulty: q = q.filter(models.QuestionSeg2.difficulty == difficulty)
     if search:     q = q.filter(models.QuestionSeg2.question_text.ilike(f"%{search}%"))
     total = q.count()
@@ -503,7 +503,7 @@ def list_seg3(
     search: Optional[str] = None,
     db: Session = Depends(get_db), current_user=Depends(require_admin),
 ):
-    q = db.query(models.QuestionSeg3)
+    q = db.query(models.QuestionSeg3).filter(models.QuestionSeg3.is_active == True)
     if search: q = q.filter(models.QuestionSeg3.scenario_text.ilike(f"%{search}%"))
     total = q.count()
     items = q.order_by(models.QuestionSeg3.id.desc()).offset((page-1)*page_size).limit(page_size).all()

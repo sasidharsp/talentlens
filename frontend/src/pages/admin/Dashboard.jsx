@@ -63,8 +63,8 @@ export default function Dashboard() {
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead><tr>
-                <th>Reference</th><th>Name</th><th>Role</th><th>Exp</th>
-                <th>Status</th><th>Score</th><th>Decision</th><th></th>
+                <th>Reference</th><th>Name</th><th>Role</th>
+                <th>Status</th><th>Score</th><th>Submitted</th><th>Decision</th><th></th>
               </tr></thead>
               <tbody>
                 {recent.map(c => (
@@ -72,10 +72,11 @@ export default function Dashboard() {
                     <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-2)' }}>{c.reference_code}</td>
                     <td style={{ fontWeight: 500 }}>{c.full_name}</td>
                     <td style={{ color: 'var(--text-2)' }}>{c.role_name}</td>
-                    <td style={{ color: 'var(--text-2)' }}>{c.years_of_experience}y</td>
+                    
                     <td>{statusBadge(c.status)}</td>
                     <td style={{ fontWeight: 600, color: scoreColor(c.overall_score) }}>
-                      {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}
+                      {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{c.submitted_at ? new Date(c.submitted_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                     </td>
                     <td>{c.final_status ? statusBadge(c.final_status) : <span style={{ color: 'var(--text-3)', fontSize: 13 }}>—</span>}</td>
                     <td><ArrowRight size={14} color="var(--text-3)" /></td>

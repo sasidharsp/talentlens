@@ -116,6 +116,7 @@ def list_candidates(
             } if req else None,
             "years_of_experience": candidate.years_of_experience,
             "submitted_at": session.submitted_at,
+            "registered_at": candidate.created_at,
             "status": session.status,
             "overall_score": evaluation.overall_score if evaluation else None,
             "final_status": cs.final_status if cs else "pending",

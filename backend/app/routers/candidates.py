@@ -147,24 +147,35 @@ async def register_candidate(
 @router.get("/instructions/{session_token}")
 def get_instructions(session_token: str, db: Session = Depends(get_db)):
     session = _get_session_or_404(db, session_token)
-    cfg = db.query(models.SystemConfig).filter(
-        models.SystemConfig.key == "assessment_instructions"
-    ).first()
-    instructions = cfg.value if cfg else "Please complete all three segments carefully."
 
-    seg1_timer = get_config_int(db, "seg1_timer_minutes", 3) * 60
-    seg2_timer = get_config_int(db, "seg2_timer_minutes", 8) * 60
-    seg3_timer = get_config_int(db, "seg3_timer_minutes", 4) * 60
+    # Load custom instructions from InstructionVersion if available
+    latest_instruction = (
+        db.query(models.InstructionVersion)
+        .filter_by(instruction_type="pre_assessment", is_active=True)
+        .order_by(models.InstructionVersion.id.desc())
+        .first()
+    )
+    if latest_instruction:
+        instructions = latest_instruction.content
+    else:
+        cfg = db.query(models.SystemConfig).filter_by(key="assessment_instructions").first()
+        instructions = cfg.value if cfg else "Please complete all three segments carefully."
+
+    seg1_timer = get_config_int(db, "seg1_timer_minutes", 3)
+    seg2_timer = get_config_int(db, "seg2_timer_minutes", 8)
+    seg3_timer = get_config_int(db, "seg3_timer_minutes", 4)
     seg1_count = get_config_int(db, "seg1_question_count", 15)
     seg2_count = get_config_int(db, "seg2_question_count", 10)
     seg3_count = get_config_int(db, "seg3_question_count", 2)
+    total_minutes = seg1_timer + seg2_timer + seg3_timer
 
     return {
         "instructions": instructions,
+        "total_timer_minutes": total_minutes,
         "segments": [
-            {"number": 1, "description": "Experience-Based MCQs", "questions": seg1_count, "timer_seconds": seg1_timer},
-            {"number": 2, "description": "Role & Skills MCQs with Rationale", "questions": seg2_count, "timer_seconds": seg2_timer},
-            {"number": 3, "description": "Scenario-Based Open Questions", "questions": seg3_count, "timer_seconds": seg3_timer},
+            {"number": 1, "label": "Knowledge Assessment", "description": "Multiple-choice questions", "questions": seg1_count, "timer_minutes": seg1_timer, "timer_seconds": seg1_timer * 60},
+            {"number": 2, "label": "Role Competency",      "description": "Role-fit MCQs with rationale", "questions": seg2_count, "timer_minutes": seg2_timer, "timer_seconds": seg2_timer * 60},
+            {"number": 3, "label": "Scenario Response",    "description": "Open-ended scenario questions", "questions": seg3_count, "timer_minutes": seg3_timer, "timer_seconds": seg3_timer * 60},
         ],
         "candidate_name": session.candidate.full_name,
         "status": session.status,

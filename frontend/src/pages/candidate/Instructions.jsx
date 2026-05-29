@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/client';
-import { Clock, BookOpen, Brain, Lightbulb, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
+import { Clock, BookOpen, Brain, Lightbulb, AlertTriangle, CheckCircle2, Zap, Timer } from 'lucide-react';
+
+const SEG_ICONS = { 1: BookOpen, 2: Brain, 3: Lightbulb };
+const SEG_COLORS = { 1: '#4F46E5', 2: '#7C3AED', 3: '#D97706' };
+const SEG_BG    = { 1: '#EEF2FF', 2: '#F5F3FF', 3: '#FFFBEB' };
 
 export default function Instructions() {
   const { sessionToken: token } = useParams();
@@ -23,19 +27,27 @@ export default function Instructions() {
     } finally { setLoading(false); }
   };
 
-  if (!data) return <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'100vh' }}><div className="spinner-lg spinner" /></div>;
+  const fmtTime = (mins) => {
+    if (!mins) return '';
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}h ${m}min` : `${h}h`;
+  };
 
-  const segments = [
-    { num: 1, title: 'Knowledge Assessment', icon: BookOpen, color: '#4F46E5', bg: '#EEF2FF', desc: `${data.seg1_count || 15} multiple-choice questions testing core knowledge. Timer runs per question.` },
-    { num: 2, title: 'Role Competency', icon: Brain, color: '#7C3AED', bg: '#F5F3FF', desc: `${data.seg2_count || 10} role-specific MCQs with optional rationale. Tests applied thinking.` },
-    { num: 3, title: 'Scenario Response', icon: Lightbulb, color: '#D97706', bg: '#FFFBEB', desc: `${data.seg3_count || 2} open-ended scenarios. AI-evaluated for relevance and depth.` },
-  ];
+  if (!data) return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="spinner-lg spinner" />
+    </div>
+  );
+
+  const totalMins = data.total_timer_minutes || (data.segments || []).reduce((a, s) => a + (s.timer_minutes || Math.round(s.timer_seconds / 60) || 0), 0);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display:'flex', alignItems:'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Zap size={16} color="#fff" />
           </div>
@@ -51,44 +63,94 @@ export default function Instructions() {
         )}
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 24px 60px' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '36px 24px 60px' }}>
         <div style={{ width: '100%', maxWidth: 660 }}>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 30, fontWeight: 400, color: 'var(--text)', marginBottom: 8 }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 30, fontWeight: 400, color: 'var(--text)', marginBottom: 6 }}>
               Assessment Instructions
             </h1>
-            <p style={{ fontSize: 15, color: 'var(--text-2)' }}>Please read carefully before you begin.</p>
+            {data.candidate_name && (
+              <p style={{ fontSize: 15, color: 'var(--text-2)' }}>Welcome, <strong>{data.candidate_name}</strong></p>
+            )}
+          </div>
+
+          {/* Total time banner */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1E1B4B 0%, #4338CA 100%)',
+            borderRadius: 12, padding: '18px 24px', marginBottom: 20,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Timer size={24} color="#A5B4FC" />
+              <div>
+                <div style={{ fontSize: 12, color: '#A5B4FC', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Time Allotted</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>{fmtTime(totalMins)}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              {(data.segments || []).map(s => (
+                <div key={s.number} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{fmtTime(s.timer_minutes || Math.round((s.timer_seconds || 0) / 60))}</div>
+                  <div style={{ fontSize: 10, color: '#A5B4FC' }}>Seg {s.number}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Segment cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-            {segments.map(({ num, title, icon: Icon, color, bg, desc }) => (
-              <div key={num} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 11, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon size={20} color={color} />
-                </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>Segment {num} — {title}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+            {(data.segments || []).map(s => {
+              const Icon = SEG_ICONS[s.number] || BookOpen;
+              const color = SEG_COLORS[s.number];
+              const bg = SEG_BG[s.number];
+              const mins = s.timer_minutes || Math.round((s.timer_seconds || 0) / 60);
+              return (
+                <div key={s.number} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 11, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon size={20} color={color} />
                   </div>
-                  <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{desc}</p>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', marginBottom: 2 }}>
+                      Segment {s.number} — {s.label || s.description}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-2)' }}>{s.description}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, textAlign: 'center', flexShrink: 0 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 18, color }}>{s.questions}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Questions</div>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 18, color }}>{fmtTime(mins)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Time</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
+          {/* Custom instructions from admin */}
+          {data.instructions && data.instructions !== 'Please complete all three segments carefully.' && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Additional Instructions</div>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{data.instructions}</div>
+            </div>
+          )}
+
           {/* Warnings */}
-          <div style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 10, padding: '16px 18px', marginBottom: 24 }}>
+          <div style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <AlertTriangle size={18} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
+              <AlertTriangle size={17} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
               <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Important — Please read</div>
-                <ul style={{ fontSize: 13, color: '#92400E', lineHeight: 1.8, paddingLeft: 16 }}>
-                  <li>Each segment is individually timed. The clock starts when a segment loads.</li>
-                  <li>Unanswered questions when time expires are submitted as blank.</li>
-                  <li>Do not close or refresh the browser mid-assessment.</li>
-                  <li>Ensure a stable internet connection before proceeding.</li>
-                  <li>This assessment may only be attempted once within the allowed period.</li>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Important — Please read before starting</div>
+                <ul style={{ fontSize: 13, color: '#92400E', lineHeight: 1.9, paddingLeft: 16 }}>
+                  <li>The assessment is <strong>proctored</strong> — your webcam will be active and tab switches are monitored</li>
+                  <li>Each segment is individually timed. The clock starts when a segment loads</li>
+                  <li>Unanswered questions when time expires are submitted as blank</li>
+                  <li>Do not close or refresh the browser during the assessment</li>
+                  <li>Copy-paste and keyboard shortcuts are disabled</li>
+                  <li>This assessment may only be attempted once</li>
                 </ul>
               </div>
             </div>
@@ -97,16 +159,17 @@ export default function Instructions() {
           <div className="portal-card" style={{ padding: 24 }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
               <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)}
-                style={{ marginTop: 2, width: 16, height: 16, accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }} />
+                style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }} />
               <span style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}>
-                I have read and understood the instructions. I confirm that I am the intended candidate and will complete this assessment honestly and independently.
+                I have read and understood all instructions. I confirm that I am the intended candidate and will complete this assessment honestly and independently.
               </span>
             </label>
-            <button
-              onClick={begin} disabled={!accepted || loading}
+            <button onClick={begin} disabled={!accepted || loading}
               className="btn btn-primary btn-lg"
-              style={{ width: '100%', justifyContent: 'center', marginTop: 20 }}>
-              {loading ? <><span className="spinner" style={{width:16,height:16}} />Starting…</> : <><CheckCircle2 size={16} />Begin Assessment</>}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
+              {loading
+                ? <><span className="spinner" style={{ width: 16, height: 16 }} />Starting…</>
+                : <><CheckCircle2 size={16} />Begin Assessment ({fmtTime(totalMins)})</>}
             </button>
           </div>
         </div>

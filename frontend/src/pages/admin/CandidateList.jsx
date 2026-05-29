@@ -112,7 +112,7 @@ export default function CandidateList() {
                 <table className="tbl">
                   <thead><tr>
                     <th>Reference</th><th>Name</th><th>Email</th><th>Role</th>
-                    <th>Exp</th><th>Status</th><th>Score</th><th>Decision</th><th></th>
+                    <th>Exp</th><th>Status</th><th>Score</th><th>Registered</th><th>Decision</th><th></th>
                   </tr></thead>
                   <tbody>
                     {data.items.map(c => (
@@ -129,7 +129,7 @@ export default function CandidateList() {
                             </div>
                           )}
                         </td>
-                        <td style={{ color: 'var(--text-2)' }}>{c.years_of_experience}y</td>
+                        <td style={{ color: 'var(--text-2)' }}>{c.years_of_experience ? `${c.years_of_experience}y` : '—'}</td>
                         <td>{statusBadge(c.status)}</td>
                         <td style={{ fontWeight: 600, color: scoreColor(c.overall_score) }}>
                           {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}
