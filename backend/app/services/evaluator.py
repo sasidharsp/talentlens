@@ -237,12 +237,130 @@ def run_full_evaluation(db: Session, session_id: int, evaluator_user_id: Optiona
     eval_record.evaluated_by = evaluator_user_id
 
     # Update session status
-    session = db.query(models.AssessmentSession).filter(
+    session_rec = db.query(models.AssessmentSession).filter(
         models.AssessmentSession.id == session_id
     ).first()
-    if session:
-        session.status = "EVALUATED"
+    if session_rec:
+        session_rec.status = "EVALUATED"
 
     db.commit()
     db.refresh(eval_record)
+
+    # ── Auto-generate AI recommendation in background ──
+    try:
+        _auto_recommend(db, session_id, eval_record, role_context, evaluator_user_id)
+    except Exception:
+        pass  # Never block evaluation if recommendation fails
+
     return eval_record
+
+
+def _auto_recommend(db, session_id: int, eval_record, role_context: str, evaluator_user_id: Optional[int]):
+    """
+    Automatically generate AI recommendation after evaluation.
+    Runs synchronously but exceptions are swallowed so they never block.
+    """
+    import json as json_lib
+    import anthropic as anthropic_sdk
+    from datetime import timedelta
+
+    session = db.query(models.AssessmentSession).filter_by(id=session_id).first()
+    if not session or not session.candidate:
+        return
+
+    candidate = session.candidate
+
+    # Cohort stats
+    from sqlalchemy import func as sqlfunc
+    cohort = db.query(
+        sqlfunc.avg(models.EvaluationResult.overall_score).label("avg"),
+        sqlfunc.count(models.EvaluationResult.id).label("total"),
+    ).first()
+    cohort_avg   = round(cohort.avg or 0, 1)
+    cohort_total = max(cohort.total or 1, 1)
+
+    below_count = db.query(models.EvaluationResult).filter(
+        models.EvaluationResult.overall_score < (eval_record.overall_score or 0)
+    ).count()
+    percentile = round((below_count / cohort_total) * 100)
+    pass_count = db.query(models.EvaluationResult).filter(
+        models.EvaluationResult.overall_score >= 70
+    ).count()
+    pass_rate = round(pass_count / cohort_total * 100)
+
+    # Seg 2 rationale samples
+    seg2_rationales = db.query(models.SegmentResponse).filter(
+        models.SegmentResponse.session_id == session_id,
+        models.SegmentResponse.segment_number == 2,
+        models.SegmentResponse.rationale_text.isnot(None),
+        models.SegmentResponse.rationale_text != "",
+    ).limit(3).all()
+    rationale_samples = [r.rationale_text for r in seg2_rationales if r.rationale_text]
+
+    # Seg 3 summary
+    seg3_summary = []
+    for i, det in enumerate(eval_record.seg3_details or [], 1):
+        if det.get("pending_review"):
+            seg3_summary.append(f"Q{i}: Pending manual review")
+        else:
+            seg3_summary.append(
+                f"Q{i}: {det.get('score',0)}/10 — {det.get('rationale','')[:200]}"
+            )
+
+    role_label = candidate.requisition.title if candidate.requisition else (
+        candidate.role.name if candidate.role else "BFSI Professional"
+    )
+
+    prompt = f"""You are an expert BFSI talent assessor. Provide a concise hiring recommendation.
+
+CANDIDATE: {candidate.full_name} | {role_label} | {candidate.years_of_experience or 0} yrs exp
+
+SCORES: Seg1={eval_record.seg1_score:.1f}% ({eval_record.seg1_correct}/{eval_record.seg1_total}) | Seg2={eval_record.seg2_score:.1f}% ({eval_record.seg2_correct}/{eval_record.seg2_total}) | Seg3={eval_record.seg3_score:.1f}% | Overall={eval_record.overall_score:.1f}%
+
+SEG2 RATIONALE SAMPLES: {chr(10).join(f'• "{r}"' for r in rationale_samples) if rationale_samples else "None provided"}
+
+SEG3 ANALYSIS: {chr(10).join(seg3_summary) if seg3_summary else "No scenario responses"}
+
+COHORT: {cohort_total} evaluated | Average={cohort_avg}% | This candidate={percentile}th percentile | Pass rate={pass_rate}%
+
+ROLE CONTEXT: {role_context or role_label}
+
+Return ONLY this JSON:
+{{
+  "recommendation": "SHORTLIST"|"HOLD"|"REJECT",
+  "confidence": "HIGH"|"MEDIUM"|"LOW",
+  "summary": "2-3 sentence executive summary",
+  "key_observations": ["obs1","obs2","obs3","obs4"],
+  "strengths": ["s1","s2","s3"],
+  "development_areas": ["d1","d2","d3"],
+  "risk_assessment": "Brief risk assessment",
+  "interview_focus": ["f1","f2","f3"],
+  "cohort_standing": "One sentence comparative summary",
+  "score_interpretation": "What the score pattern reveals"
+}}"""
+
+    client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
+    message = client.messages.create(
+        model=settings.llm_model,
+        max_tokens=1200,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"): raw = raw[4:]
+    rec = json_lib.loads(raw.strip())
+
+    # Enrich with cohort data
+    rec["cohort_data"] = {
+        "total_evaluated": cohort_total,
+        "cohort_average": cohort_avg,
+        "percentile": percentile,
+        "pass_rate": pass_rate,
+        "candidate_score": round(eval_record.overall_score, 1),
+    }
+    rec["generated_at"] = datetime.utcnow().isoformat()
+    rec["generated_by"] = "Auto-generated"
+
+    eval_record.ai_recommendation = rec
+    db.commit()

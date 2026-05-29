@@ -351,7 +351,24 @@ def submit_segment(
     db.commit()
 
     if payload.segment == 3:
+        # ── Kick off full evaluation in background thread ──
+        import threading
+        from app.services.evaluator import run_full_evaluation
+        from app.database import SessionLocal
+
+        def _run_eval(sid: int):
+            bg_db = SessionLocal()
+            try:
+                run_full_evaluation(bg_db, sid)
+            except Exception:
+                pass  # Never surface errors to candidate
+            finally:
+                bg_db.close()
+
+        threading.Thread(target=_run_eval, args=(session.id,), daemon=True).start()
+
         return {"message": "Assessment submitted successfully. Thank you!", "submitted": True}
+
     return {"message": f"Segment {payload.segment} submitted. Proceed to segment {payload.segment + 1}.", "submitted": False}
 
 
@@ -509,6 +526,23 @@ async def terminate_session(
         details=reason,
     ))
     db.commit()
+
+    # Evaluate whatever was submitted before termination
+    import threading
+    from app.services.evaluator import run_full_evaluation
+    from app.database import SessionLocal
+
+    def _run_eval(sid: int):
+        bg_db = SessionLocal()
+        try:
+            run_full_evaluation(bg_db, sid)
+        except Exception:
+            pass
+        finally:
+            bg_db.close()
+
+    threading.Thread(target=_run_eval, args=(session.id,), daemon=True).start()
+
     return {"terminated": True}
 
 

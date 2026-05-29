@@ -350,12 +350,12 @@ export default function CandidateDetail() {
             <button className="btn btn-secondary btn-sm" onClick={downloadResume}><Download size={14} /> Resume</button>
           )}
           {session?.status === 'SUBMITTED' && isAdmin && (
-            <button className="btn btn-primary btn-sm" onClick={triggerEval} disabled={evaluating}>
-              {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Evaluating…</> : <><Zap size={14} />Run AI Evaluation</>}
+            <button className="btn btn-secondary btn-sm" onClick={triggerEval} disabled={evaluating} title="Evaluation runs automatically — click to force re-run">
+              {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Evaluating…</> : <><Zap size={14} />Force Re-evaluate</>}
             </button>
           )}
           {(session?.status === 'EVALUATED' || evaluation) && isAdmin && (
-            <button className="btn btn-secondary btn-sm" onClick={triggerEval} disabled={evaluating} title="Re-run evaluation — use after fixing API key or uploading new questions">
+            <button className="btn btn-secondary btn-sm" onClick={triggerEval} disabled={evaluating} title="Re-run evaluation with latest questions and role context">
               {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Re-evaluating…</> : <><Zap size={14} />Re-evaluate</>}
             </button>
           )}
