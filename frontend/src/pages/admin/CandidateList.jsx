@@ -147,13 +147,15 @@ export default function CandidateList() {
                             : <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>}
                         </td>
                         <td>{c.final_status ? statusBadge(c.final_status) : <span style={{ color: 'var(--text-3)', fontSize: 13 }}>—</span>}</td>
-                        <td onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <ArrowRight size={14} color="var(--text-3)" />
-                          {isSuperAdmin && (
-                            <button className="btn btn-danger btn-sm" onClick={e => deleteCandidate(e, c.session_id)} title="Delete">
-                              <Trash2 size={12} />
-                            </button>
-                          )}
+                        <td>
+                          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <ArrowRight size={14} color="var(--text-3)" />
+                            {isSuperAdmin && (
+                              <button className="btn btn-danger btn-sm" onClick={e => deleteCandidate(e, c.session_id)} title="Delete">
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
