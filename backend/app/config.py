@@ -13,7 +13,6 @@ class Settings(BaseSettings):
 
     # Anthropic LLM
     anthropic_api_key: str = ""
-    cloudinary_url: str = ""   # full CLOUDINARY_URL env var e.g. cloudinary://key:secret@cloud
     llm_model: str = "claude-sonnet-4-5"
 
     # File uploads
