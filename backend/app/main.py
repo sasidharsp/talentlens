@@ -62,6 +62,7 @@ def seed_defaults():
             "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS integrity_score FLOAT",
             "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS violation_count INTEGER DEFAULT 0",
             "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS termination_reason VARCHAR(200)",
+            "ALTER TABLE evaluation_results ADD COLUMN IF NOT EXISTS ai_recommendation JSONB",
         ]
         for sql in migrations:
             try:

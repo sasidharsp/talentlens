@@ -254,6 +254,7 @@ export default function CandidateDetail() {
   const [proctorEvents, setProctorEvents] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [evaluating, setEvaluating] = useState(false);
+  const [recommending, setRecommending] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
 
   const load = () => {
@@ -275,6 +276,16 @@ export default function CandidateDetail() {
     try { await api.post(`/admin/candidates/${id}/evaluate`); await load(); }
     catch { alert('Evaluation failed.'); }
     finally { setEvaluating(false); }
+  };
+
+  const generateRecommendation = async () => {
+    setRecommending(true);
+    try {
+      await api.post(`/admin/candidates/${id}/recommend`);
+      await load();
+      setActiveTab('recommendation');
+    } catch (e) { alert(e.response?.data?.detail || 'Recommendation failed.'); }
+    finally { setRecommending(false); }
   };
 
   const downloadResume = () => downloadFile(`/api/admin/candidates/${id}/resume`, `resume_${candidate?.reference_code}.pdf`);
@@ -301,6 +312,7 @@ export default function CandidateDetail() {
 
   const tabs = [
     { key: 'profile', label: 'Profile' },
+    { key: 'recommendation', label: evaluation?.ai_recommendation ? '⭐ AI Recommendation' : 'AI Recommendation' },
     { key: 'responses', label: 'Assessment Responses' },
     { key: 'lifecycle', label: `Lifecycle${rounds.length ? ` (${rounds.length})` : ''}` },
     { key: 'integrity', label: 'Integrity Report' },
@@ -347,6 +359,13 @@ export default function CandidateDetail() {
               {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Re-evaluating…</> : <><Zap size={14} />Re-evaluate</>}
             </button>
           )}
+          {isEvaluated && isAdmin && (
+            <button className="btn btn-primary btn-sm" onClick={generateRecommendation} disabled={recommending}>
+              {recommending
+                ? <><span className="spinner" style={{ width: 14, height: 14 }} />Analysing…</>
+                : <><Zap size={14} />{evaluation?.ai_recommendation ? 'Refresh Recommendation' : 'Generate AI Recommendation'}</>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -374,7 +393,26 @@ export default function CandidateDetail() {
           </div>
         )}
 
-        {/* Tabs */}
+        {/* AI Recommendation preview strip */}
+        {evaluation?.ai_recommendation && (() => {
+          const rec = evaluation.ai_recommendation;
+          const colors = { SHORTLIST: ['var(--success-light)', 'var(--success-border)', 'var(--success)'], HOLD: ['var(--warning-light)', 'var(--warning-border)', 'var(--warning)'], REJECT: ['var(--danger-light)', 'var(--danger-border)', 'var(--danger)'] };
+          const [bg, border, color] = colors[rec.recommendation] || ['var(--surface-2)', 'var(--border)', 'var(--text)'];
+          return (
+            <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: '12px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontWeight: 900, fontSize: 15, color, letterSpacing: '0.04em' }}>{rec.recommendation}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>·</span>
+                <span style={{ fontSize: 12, color, fontWeight: 600 }}>{rec.confidence} confidence</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>·</span>
+                <span style={{ fontSize: 13, color: 'var(--text-2)', fontStyle: 'italic' }}>"{rec.summary?.slice(0, 120)}{rec.summary?.length > 120 ? '…' : ''}"</span>
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ flexShrink: 0, fontSize: 12 }} onClick={() => setActiveTab('recommendation')}>
+                Full Report →
+              </button>
+            </div>
+          );
+        })()}
         <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
           {tabs.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -389,6 +427,145 @@ export default function CandidateDetail() {
             </button>
           ))}
         </div>
+
+        {/* AI Recommendation tab */}
+        {activeTab === 'recommendation' && (
+          <div style={{ maxWidth: 800 }}>
+            {!evaluation ? (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-2)' }}>
+                Run AI Evaluation first before generating a recommendation.
+              </div>
+            ) : !evaluation.ai_recommendation ? (
+              <div style={{ textAlign: 'center', padding: 60 }}>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>🤖</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>No recommendation yet</div>
+                <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 24 }}>
+                  Generate an AI-powered hiring recommendation based on all three segments,<br />candidate rationales, and cohort benchmarking.
+                </div>
+                <button className="btn btn-primary" onClick={generateRecommendation} disabled={recommending}>
+                  {recommending ? <><span className="spinner" style={{ width: 16, height: 16 }} />Analysing candidate…</> : <><Zap size={16} />Generate AI Recommendation</>}
+                </button>
+              </div>
+            ) : (() => {
+              const rec = evaluation.ai_recommendation;
+              const recColor = { SHORTLIST: 'var(--success)', HOLD: 'var(--warning)', REJECT: 'var(--danger)' }[rec.recommendation] || 'var(--text)';
+              const recBg    = { SHORTLIST: 'var(--success-light)', HOLD: 'var(--warning-light)', REJECT: 'var(--danger-light)' }[rec.recommendation] || 'var(--surface-2)';
+              const recBorder= { SHORTLIST: 'var(--success-border)', HOLD: 'var(--warning-border)', REJECT: 'var(--danger-border)' }[rec.recommendation] || 'var(--border)';
+              const confColor= { HIGH: 'var(--success)', MEDIUM: 'var(--warning)', LOW: 'var(--danger)' }[rec.confidence] || 'var(--text-2)';
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Hero recommendation card */}
+                  <div style={{ background: recBg, border: `2px solid ${recBorder}`, borderRadius: 14, padding: 28 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: recColor, marginBottom: 8 }}>AI Hiring Recommendation</div>
+                        <div style={{ fontSize: 36, fontWeight: 900, color: recColor, letterSpacing: '-0.02em' }}>{rec.recommendation}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Confidence:</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: confColor }}>{rec.confidence}</span>
+                        </div>
+                      </div>
+                      {/* Cohort comparison */}
+                      {rec.cohort_data && (
+                        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px', minWidth: 220 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Cohort Comparison</div>
+                          {[
+                            ['This Candidate', `${rec.cohort_data.candidate_score}%`, recColor],
+                            ['Cohort Average', `${rec.cohort_data.cohort_average}%`, 'var(--text)'],
+                            ['Percentile Rank', `${rec.cohort_data.percentile}th`, 'var(--primary)'],
+                            ['Pass Rate (≥70%)', `${rec.cohort_data.pass_rate}%`, 'var(--text-2)'],
+                            ['Total Evaluated', rec.cohort_data.total_evaluated, 'var(--text-2)'],
+                          ].map(([label, val, color]) => (
+                            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
+                              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{label}</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color }}>{val}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Summary */}
+                    <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.7, fontStyle: 'italic' }}>"{rec.summary}"</div>
+                  </div>
+
+                  {/* Score interpretation */}
+                  {rec.score_interpretation && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Score Pattern Analysis</div>
+                      <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.7 }}>{rec.score_interpretation}</div>
+                    </div>
+                  )}
+
+                  {/* Key observations */}
+                  {rec.key_observations?.length > 0 && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Key Observations</div>
+                      {rec.key_observations.map((obs, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                          <span style={{ fontSize: 13, color: 'var(--primary)', flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
+                          <span style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>{obs}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Strengths & Development areas */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    {rec.strengths?.length > 0 && (
+                      <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', borderRadius: 12, padding: '16px 18px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>✓ Strengths</div>
+                        {rec.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: '#065F46', lineHeight: 1.6, marginBottom: 6 }}>• {s}</div>)}
+                      </div>
+                    )}
+                    {rec.development_areas?.length > 0 && (
+                      <div style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 12, padding: '16px 18px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>↑ Development Areas</div>
+                        {rec.development_areas.map((d, i) => <div key={i} style={{ fontSize: 13, color: '#92400E', lineHeight: 1.6, marginBottom: 6 }}>• {d}</div>)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Risk assessment */}
+                  {rec.risk_assessment && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hiring Risk Assessment</div>
+                      <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.7 }}>{rec.risk_assessment}</div>
+                    </div>
+                  )}
+
+                  {/* Interview focus areas */}
+                  {rec.interview_focus?.length > 0 && rec.recommendation !== 'REJECT' && (
+                    <div style={{ background: 'var(--primary-light)', border: '1px solid var(--primary-border)', borderRadius: 12, padding: '16px 20px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Suggested Interview Focus Areas</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {rec.interview_focus.map((f, i) => (
+                          <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--primary-border)', borderRadius: 99, padding: '4px 14px', fontSize: 13, color: 'var(--primary)', fontWeight: 500 }}>{f}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cohort standing */}
+                  {rec.cohort_standing && (
+                    <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, textAlign: 'center' }}>
+                      📊 {rec.cohort_standing}
+                    </div>
+                  )}
+
+                  {/* Meta */}
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'right' }}>
+                    Generated {rec.generated_at ? new Date(rec.generated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : ''} by {rec.generated_by}
+                    {' · '}
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px' }} onClick={generateRecommendation} disabled={recommending}>
+                      {recommending ? 'Refreshing…' : 'Refresh'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Profile tab */}
         {activeTab === 'profile' && (
@@ -470,7 +647,7 @@ export default function CandidateDetail() {
                   <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {segResponses.map((r, i) => (
                       <div key={r.id || i} style={{ borderBottom: i < segResponses.length - 1 ? '1px solid var(--border)' : 'none', paddingBottom: i < segResponses.length - 1 ? 14 : 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
                           Q{i + 1}. {r.question_text}
                         </div>
                         {seg < 3 ? (

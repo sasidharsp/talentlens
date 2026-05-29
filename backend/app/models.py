@@ -225,6 +225,7 @@ class EvaluationResult(Base):
     seg3_score = Column(Float, nullable=True)
     seg3_details = Column(JSON, nullable=True)   # Per-question LLM breakdown
     overall_score = Column(Float, nullable=True)
+    ai_recommendation = Column(JSON, nullable=True)  # Full AI recommendation
     evaluated_at = Column(DateTime(timezone=True), nullable=True)
     evaluated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 

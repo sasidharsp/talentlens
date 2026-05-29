@@ -112,7 +112,7 @@ export default function CandidateList() {
                 <table className="tbl">
                   <thead><tr>
                     <th>Reference</th><th>Name</th><th>Email</th><th>Role</th>
-                    <th>Exp</th><th>Status</th><th>Score</th><th>Registered</th><th>Decision</th><th></th>
+                    <th>Exp</th><th>Status</th><th>Score</th><th>Submitted</th><th>AI Verdict</th><th>Decision</th><th></th>
                   </tr></thead>
                   <tbody>
                     {data.items.map(c => (
@@ -133,6 +133,18 @@ export default function CandidateList() {
                         <td>{statusBadge(c.status)}</td>
                         <td style={{ fontWeight: 600, color: scoreColor(c.overall_score) }}>
                           {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                          {c.submitted_at
+                            ? new Date(c.submitted_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+                            : c.registered_at
+                              ? new Date(c.registered_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+                              : '—'}
+                        </td>
+                        <td>
+                          {c.ai_verdict
+                            ? <span className={`badge ${c.ai_verdict === 'SHORTLIST' ? 'badge-green' : c.ai_verdict === 'HOLD' ? 'badge-amber' : 'badge-red'}`} style={{ fontSize: 11, fontWeight: 700 }}>{c.ai_verdict}</span>
+                            : <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>}
                         </td>
                         <td>{c.final_status ? statusBadge(c.final_status) : <span style={{ color: 'var(--text-3)', fontSize: 13 }}>—</span>}</td>
                         <td onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

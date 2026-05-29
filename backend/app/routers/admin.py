@@ -117,6 +117,7 @@ def list_candidates(
             "years_of_experience": candidate.years_of_experience,
             "submitted_at": session.submitted_at,
             "registered_at": candidate.created_at,
+            "ai_verdict": evaluation.ai_recommendation.get("recommendation") if evaluation and evaluation.ai_recommendation else None,
             "status": session.status,
             "overall_score": evaluation.overall_score if evaluation else None,
             "final_status": cs.final_status if cs else "pending",
@@ -236,6 +237,7 @@ def get_candidate_detail(
             "seg3_score": evaluation.seg3_score,
             "seg3_details": evaluation.seg3_details,
             "overall_score": evaluation.overall_score,
+            "ai_recommendation": evaluation.ai_recommendation,
             "evaluated_at": evaluation.evaluated_at,
         } if evaluation else None,
         # ── responses with consistent segment_number key ──
@@ -925,3 +927,153 @@ def get_instruction_history(
         }
         for v in versions
     ]
+
+# ─────────────── AI RECOMMENDATION ───────────────
+@router.post("/candidates/{session_id}/recommend")
+def generate_ai_recommendation(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    """
+    Generate a holistic AI recommendation for a candidate using Claude.
+    Considers all three segment scores, Seg 2 rationales, Seg 3 detailed feedback,
+    and benchmarks against the full cohort.
+    """
+    import json as json_lib
+    import anthropic as anthropic_sdk
+    from app.config import settings
+
+    session = db.query(models.AssessmentSession).filter_by(id=session_id).first()
+    if not session:
+        raise HTTPException(404, "Session not found.")
+
+    evaluation = db.query(models.EvaluationResult).filter_by(session_id=session_id).first()
+    if not evaluation:
+        raise HTTPException(400, "Run AI Evaluation first before generating a recommendation.")
+
+    candidate = session.candidate
+    role_label = candidate.requisition.title if candidate.requisition else (
+        candidate.role.name if candidate.role else "BFSI Professional"
+    )
+
+    # ── Cohort statistics ──
+    from sqlalchemy import func as sqlfunc
+    cohort = db.query(
+        sqlfunc.avg(models.EvaluationResult.overall_score).label("avg"),
+        sqlfunc.min(models.EvaluationResult.overall_score).label("min"),
+        sqlfunc.max(models.EvaluationResult.overall_score).label("max"),
+        sqlfunc.count(models.EvaluationResult.id).label("total"),
+    ).first()
+
+    cohort_avg   = round(cohort.avg or 0, 1)
+    cohort_total = cohort.total or 1
+
+    # Percentile rank
+    below_count = db.query(models.EvaluationResult).filter(
+        models.EvaluationResult.overall_score < (evaluation.overall_score or 0)
+    ).count()
+    percentile = round((below_count / cohort_total) * 100)
+
+    # Pass rate (>= 70%)
+    pass_count = db.query(models.EvaluationResult).filter(
+        models.EvaluationResult.overall_score >= 70
+    ).count()
+    pass_rate = round(pass_count / cohort_total * 100)
+
+    # ── Seg 2 rationale samples ──
+    seg2_rationales = db.query(models.SegmentResponse).filter(
+        models.SegmentResponse.session_id == session_id,
+        models.SegmentResponse.segment_number == 2,
+        models.SegmentResponse.rationale_text.isnot(None),
+        models.SegmentResponse.rationale_text != "",
+    ).limit(3).all()
+
+    rationale_samples = [r.rationale_text for r in seg2_rationales if r.rationale_text]
+
+    # ── Seg 3 summary ──
+    seg3_summary = []
+    for i, det in enumerate(evaluation.seg3_details or [], 1):
+        if det.get("pending_review"):
+            seg3_summary.append(f"Q{i}: Pending manual review")
+        else:
+            seg3_summary.append(
+                f"Q{i}: Score {det.get('score', 0)}/10\n"
+                f"   Assessment: {det.get('rationale', '')[:200]}\n"
+                f"   Strengths: {', '.join((det.get('strengths') or [])[:2])}\n"
+                f"   Gaps: {', '.join((det.get('gaps') or [])[:3])}"
+            )
+
+    # ── Build prompt ──
+    prompt = f"""You are an expert BFSI talent assessor. Provide a comprehensive hiring recommendation.
+
+CANDIDATE PROFILE
+Name: {candidate.full_name}
+Role Applied: {role_label}
+Experience: {candidate.years_of_experience or 'Not specified'} years
+
+ASSESSMENT SCORES
+Segment 1 — Knowledge MCQ: {evaluation.seg1_score:.1f}% ({evaluation.seg1_correct}/{evaluation.seg1_total} correct)
+Segment 2 — Role Competency MCQ: {evaluation.seg2_score:.1f}% ({evaluation.seg2_correct}/{evaluation.seg2_total} correct)
+Segment 3 — Scenario Response: {evaluation.seg3_score:.1f}%
+Overall Score: {evaluation.overall_score:.1f}%
+
+SEGMENT 2 RATIONALE SAMPLES (candidate's own reasoning)
+{chr(10).join(f'• "{r}"' for r in rationale_samples) if rationale_samples else "No rationale provided"}
+
+SEGMENT 3 DETAILED AI ANALYSIS
+{chr(10).join(seg3_summary) if seg3_summary else "No scenario responses evaluated"}
+
+COHORT BENCHMARKING ({cohort_total} candidates evaluated)
+• This candidate: {evaluation.overall_score:.1f}%
+• Cohort average: {cohort_avg}%
+• Percentile rank: {percentile}th percentile
+• Cohort pass rate (≥70%): {pass_rate}%
+
+Based on the complete profile above, provide your recommendation as a JSON object:
+{{
+  "recommendation": "SHORTLIST" | "HOLD" | "REJECT",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "summary": "2-3 sentence executive summary of the candidate",
+  "key_observations": ["observation 1", "observation 2", "observation 3", "observation 4"],
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "development_areas": ["area 1", "area 2", "area 3"],
+  "risk_assessment": "Brief hiring risk assessment",
+  "interview_focus": ["focus area 1", "focus area 2", "focus area 3"],
+  "cohort_standing": "How this candidate compares to the cohort in 1 sentence",
+  "score_interpretation": "What the score pattern reveals about the candidate"
+}}
+
+Return ONLY the JSON object. Be honest, specific, and BFSI-domain aware."""
+
+    try:
+        client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
+        message = client.messages.create(
+            model=settings.llm_model,
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"): raw = raw[4:]
+        rec = json_lib.loads(raw.strip())
+    except Exception as e:
+        raise HTTPException(500, f"AI recommendation failed: {str(e)}")
+
+    # Enrich with cohort data
+    rec["cohort_data"] = {
+        "total_evaluated": cohort_total,
+        "cohort_average": cohort_avg,
+        "percentile": percentile,
+        "pass_rate": pass_rate,
+        "candidate_score": round(evaluation.overall_score, 1),
+    }
+    rec["generated_at"] = datetime.utcnow().isoformat()
+    rec["generated_by"] = current_user.full_name
+
+    # Save to evaluation record
+    evaluation.ai_recommendation = rec
+    db.commit()
+
+    return rec

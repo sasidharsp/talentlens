@@ -124,11 +124,32 @@ async def _import_questions(file: UploadFile, db: Session, model_class, segment:
     created = 0
     errors  = []
 
+    def _clean(text: str) -> str:
+        """Normalize text from Excel: fix line endings, smart quotes, extra whitespace."""
+        if not text:
+            return text
+        # Normalize line endings (Excel ALT+Enter produces \r\n or \n)
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        # Replace smart/curly quotes with straight quotes
+        text = text.replace('\u2018', "'").replace('\u2019', "'")
+        text = text.replace('\u201c', '"').replace('\u201d', '"')
+        # Replace em-dash and en-dash
+        text = text.replace('\u2013', '-').replace('\u2014', '-')
+        # Replace non-breaking spaces
+        text = text.replace('\u00a0', ' ')
+        # Collapse multiple consecutive blank lines to single blank line
+        import re
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        # Strip leading/trailing whitespace from each line
+        lines = [line.rstrip() for line in text.split('\n')]
+        text = '\n'.join(lines)
+        return text.strip()
+
     for idx, row in df.iterrows():
         row_num = idx + 2  # Excel row number (1-indexed header + 1)
         try:
             rv = row.where(pd.notna(row), None).to_dict()
-            _str = lambda k, default="": str(rv[k]).strip() if rv.get(k) not in (None, "") else default
+            _str = lambda k, default="": _clean(str(rv[k])) if rv.get(k) not in (None, "") else default
 
             if segment == "seg3":
                 scenario = _str("scenario_text")
