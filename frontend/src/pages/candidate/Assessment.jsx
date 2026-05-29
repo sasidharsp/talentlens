@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import Timer from '../../components/Timer';
+import { renderMarkdown } from '../../utils/renderMarkdown';
 import ProctoringWrapper from '../../components/ProctoringWrapper';
 import { ChevronLeft, ChevronRight, CheckCircle2, Zap } from 'lucide-react';
 
@@ -164,8 +165,8 @@ export default function Assessment() {
                 {/* Question text */}
                 {segment < 3 ? (
                   <>
-                    <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--text)', lineHeight: 1.75, marginBottom: 24, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {q.question_text}
+                    <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--text)', lineHeight: 1.75, marginBottom: 24 }}>
+                      {renderMarkdown(q.question_text)}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {['A','B','C','D'].map(letter => (
@@ -173,7 +174,7 @@ export default function Assessment() {
                           className={`mcq-option ${ans.selected_answer === letter ? 'selected' : ''}`}
                           onClick={() => setAnswer(q.id, { selected_answer: letter })}>
                           <div className="mcq-letter">{letter}</div>
-                          <span style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{q[`option_${letter.toLowerCase()}`]}</span>
+                          <span style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}>{renderMarkdown(q[`option_${letter.toLowerCase()}`])}</span>
                         </div>
                       ))}
                     </div>
@@ -190,7 +191,7 @@ export default function Assessment() {
                   <>
                     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 20px', marginBottom: 20 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Scenario</div>
-                      <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{q.scenario_text}</div>
+                      <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.75 }}>{renderMarkdown(q.scenario_text)}</div>
                     </div>
                     <div>
                       <label className="label">Your Response <span style={{ color: 'var(--danger)' }}>*</span></label>

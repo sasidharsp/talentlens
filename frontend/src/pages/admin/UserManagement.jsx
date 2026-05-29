@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../api/client';
 import { Plus, UserCog } from 'lucide-react';
 
-const ROLES = ['super_admin','admin','interviewer'];
+const ROLES = ['super_admin','admin','qadmin','interviewer'];
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -31,7 +31,7 @@ export default function UserManagement() {
     load();
   };
 
-  const roleColor = { super_admin: 'badge-violet', admin: 'badge-indigo', interviewer: 'badge-gray' };
+  const roleColor = { super_admin: 'badge-violet', admin: 'badge-indigo', qadmin: 'badge-amber', interviewer: 'badge-gray' };
 
   return (
     <div>

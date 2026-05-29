@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import { Zap } from 'lucide-react';
+import WebcamCapture from '../../components/WebcamCapture';
+import { Zap, Camera, CheckCircle } from 'lucide-react';
 
 export default function Registration() {
   const [requisitions, setRequisitions] = useState([]);
@@ -9,6 +10,8 @@ export default function Registration() {
     full_name:'', email:'', mobile:'', requisition_id:'', years_of_experience:'',
     current_organization:''
   });
+  const [webcamPhoto, setWebcamPhoto] = useState(null);
+  const [showWebcam, setShowWebcam] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -27,6 +30,16 @@ export default function Registration() {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => v && fd.append(k, v));
       const r = await api.post('/candidate/register', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+      // Upload webcam photo if captured
+      if (webcamPhoto) {
+        const photoFd = new FormData();
+        photoFd.append('photo', webcamPhoto, 'webcam.jpg');
+        await api.post(`/candidate/webcam-photo/${r.data.session_token}`, photoFd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        }).catch(() => {}); // non-blocking
+      }
+
       navigate(`/instructions/${r.data.session_token}`, { state: { reference_code: r.data.reference_code } });
     } catch (e) {
       setError(e.response?.data?.detail || 'Registration failed. Please try again.');
@@ -61,7 +74,7 @@ export default function Registration() {
               </div>
             )}
 
-            <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <form onSubmit={submit}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label className="label">Full Name <span style={{color:'var(--danger)'}}>*</span></label>
@@ -78,10 +91,10 @@ export default function Registration() {
                 <div>
                   <label className="label">
                     Years of Experience <span style={{color:'var(--danger)'}}>*</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>— sizes question difficulty</span>
                   </label>
                   <input type="number" className="input" required min="0" max="50" step="0.5"
-                    value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)}
-                    placeholder="e.g. 4.5" />
+                    value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)} placeholder="e.g. 4.5" />
                 </div>
                 <div style={{ gridColumn: '1/-1' }}>
                   <label className="label">Applying For <span style={{color:'var(--danger)'}}>*</span></label>
@@ -98,8 +111,53 @@ export default function Registration() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}>
-                {loading ? <><span className="spinner" style={{width:16,height:16}} />Registering…</> : 'Register & Continue →'}
+              {/* Identity Photo — optional */}
+              <div style={{ marginBottom: 24 }}>
+                <label className="label">
+                  Identity Photo
+                  <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>(optional)</span>
+                </label>
+
+                {!showWebcam ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface-2)', borderRadius: 10, border: `1px dashed ${webcamPhoto ? 'var(--success-border)' : 'var(--border-2)'}` }}>
+                    {webcamPhoto ? (
+                      <>
+                        <CheckCircle size={18} color="var(--success)" />
+                        <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500, flex: 1 }}>Photo captured successfully</span>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowWebcam(true); setWebcamPhoto(null); }}>
+                          Retake
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={18} color="var(--text-3)" />
+                        <span style={{ fontSize: 13, color: 'var(--text-2)', flex: 1 }}>Take a photo for identity verification during assessment</span>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowWebcam(true)}>
+                          <Camera size={14} /> Open Camera
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: 16 }}>
+                    <WebcamCapture
+                      onCapture={(blob, dataUrl) => {
+                        if (blob) {
+                          setWebcamPhoto(blob);
+                          setShowWebcam(false);
+                        }
+                      }}
+                      onSkip={() => setShowWebcam(false)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-lg" disabled={loading}
+                style={{ width: '100%', justifyContent: 'center' }}>
+                {loading
+                  ? <><span className="spinner" style={{width:16,height:16}} />Registering…</>
+                  : 'Register & Continue →'}
               </button>
             </form>
           </div>

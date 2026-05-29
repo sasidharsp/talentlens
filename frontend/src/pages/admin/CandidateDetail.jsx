@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { renderMarkdown } from '../../utils/renderMarkdown';
 import api from '../../api/client';
 import { downloadFile } from '../../api/download';
 import {
   ArrowLeft, Download, Zap, Lock, Plus, CheckCircle2,
   Clock, Circle, User, Calendar, MessageSquare, Star,
-  ChevronDown, ChevronUp, AlertCircle
+  ChevronDown, ChevronUp, AlertCircle, Award
 } from 'lucide-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -255,6 +255,8 @@ export default function CandidateDetail() {
   const [loadError, setLoadError] = useState('');
   const [evaluating, setEvaluating] = useState(false);
   const [recommending, setRecommending] = useState(false);
+  const [r2Status, setR2Status] = useState(null);
+  const [inviting, setInviting] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
 
   const load = () => {
@@ -262,14 +264,22 @@ export default function CandidateDetail() {
     api.get(`/admin/candidates/${id}`)
       .then(r => {
         setData(r.data);
-        // Load proctor events separately
-        api.get(`/admin/candidates/${id}/proctor-events`)
-          .then(pe => setProctorEvents(pe.data || []))
-          .catch(() => {});
+        api.get(`/admin/candidates/${id}/proctor-events`).then(pe => setProctorEvents(pe.data||[])).catch(()=>{});
+        api.get(`/admin/candidates/${id}/r2-status`).then(r2 => setR2Status(r2.data)).catch(()=>{});
       })
       .catch(e => setLoadError(e.response?.data?.detail || 'Failed to load candidate. Please try again.'));
   };
   useEffect(() => { load(); }, [id]);
+
+  const inviteToRound2 = async () => {
+    setInviting(true);
+    try {
+      const r = await api.post(`/admin/round2/invite/${id}`);
+      alert(r.data.message || 'Invited to Round 2!');
+      await api.get(`/admin/candidates/${id}/r2-status`).then(r2 => setR2Status(r2.data)).catch(()=>{});
+    } catch(e) { alert(e.response?.data?.detail || 'Invite failed.'); }
+    finally { setInviting(false); }
+  };
 
   const triggerEval = async () => {
     setEvaluating(true);
@@ -358,6 +368,18 @@ export default function CandidateDetail() {
             <button className="btn btn-secondary btn-sm" onClick={triggerEval} disabled={evaluating} title="Re-run evaluation with latest questions and role context">
               {evaluating ? <><span className="spinner" style={{ width: 14, height: 14 }} />Re-evaluating…</> : <><Zap size={14} />Re-evaluate</>}
             </button>
+          )}
+          {isEvaluated && isAdmin && !r2Status?.r2_status && (
+            <button className="btn btn-sm" style={{background:'#7C3AED',color:'#fff',border:'none'}} onClick={inviteToRound2} disabled={inviting}>
+              {inviting ? 'Inviting…' : <><Award size={14}/> Invite to Round 2</>}
+            </button>
+          )}
+          {r2Status?.r2_status && (
+            <span style={{fontSize:12,background:'#F5F3FF',border:'1px solid #DDD6FE',borderRadius:8,padding:'4px 10px',color:'#7C3AED',fontWeight:600,display:'flex',alignItems:'center',gap:6}}>
+              <Award size={13}/> R2: {r2Status.r2_status}
+              {r2Status.r2_score!=null && ` · ${r2Status.r2_score.toFixed(1)}%`}
+              {r2Status.r2_verdict && ` · ${r2Status.r2_verdict}`}
+            </span>
           )}
           {isEvaluated && isAdmin && (
             <button className="btn btn-primary btn-sm" onClick={generateRecommendation} disabled={recommending}>
@@ -647,8 +669,8 @@ export default function CandidateDetail() {
                   <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {segResponses.map((r, i) => (
                       <div key={r.id || i} style={{ borderBottom: i < segResponses.length - 1 ? '1px solid var(--border)' : 'none', paddingBottom: i < segResponses.length - 1 ? 14 : 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
-                          Q{i + 1}. {r.question_text}
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8, lineHeight: 1.6 }}>
+                          {renderMarkdown(r.question_text || r.scenario_text || '—')}
                         </div>
                         {seg < 3 ? (
                           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>

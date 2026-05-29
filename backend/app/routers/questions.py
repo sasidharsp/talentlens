@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import (
     PatternFill, Font, Alignment, Border, Side
 )
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -317,6 +317,7 @@ def list_seg1(
     db: Session = Depends(get_db), current_user=Depends(require_admin),
 ):
     q = db.query(models.QuestionSeg1).filter(models.QuestionSeg1.is_active == True)
+    if batch_tag: q = q.filter(models.QuestionSeg1.batch_tag == batch_tag)
     if difficulty: q = q.filter(models.QuestionSeg1.difficulty == difficulty)
     if category:   q = q.filter(models.QuestionSeg1.category == category)
     if search:     q = q.filter(models.QuestionSeg1.question_text.ilike(f"%{search}%"))
@@ -423,6 +424,7 @@ def list_seg2(
     db: Session = Depends(get_db), current_user=Depends(require_admin),
 ):
     q = db.query(models.QuestionSeg2).filter(models.QuestionSeg2.is_active == True)
+    if batch_tag: q = q.filter(models.QuestionSeg2.batch_tag == batch_tag)
     if difficulty: q = q.filter(models.QuestionSeg2.difficulty == difficulty)
     if search:     q = q.filter(models.QuestionSeg2.question_text.ilike(f"%{search}%"))
     total = q.count()
@@ -525,6 +527,7 @@ def list_seg3(
     db: Session = Depends(get_db), current_user=Depends(require_admin),
 ):
     q = db.query(models.QuestionSeg3).filter(models.QuestionSeg3.is_active == True)
+    if batch_tag: q = q.filter(models.QuestionSeg3.batch_tag == batch_tag)
     if search: q = q.filter(models.QuestionSeg3.scenario_text.ilike(f"%{search}%"))
     total = q.count()
     items = q.order_by(models.QuestionSeg3.id.desc()).offset((page-1)*page_size).limit(page_size).all()
@@ -577,3 +580,95 @@ def export_seg3(db: Session = Depends(get_db), current_user=Depends(require_admi
     ws.append(headers)
     for r in rows: ws.append([r[h] for h in headers])
     return _wb_response(wb, "talentlens_seg3_export")
+
+# ─── GET ALL BATCH TAGS (for filter chips) ───
+@router.get("/batch-tags")
+def get_all_batch_tags(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_questions),
+):
+    """Return all distinct batch tags across all three segments."""
+    from sqlalchemy import union_all, literal_column
+    tags = set()
+    for model in [models.QuestionSeg1, models.QuestionSeg2, models.QuestionSeg3]:
+        rows = db.query(model.batch_tag).filter(
+            model.batch_tag.isnot(None),
+            model.batch_tag != "",
+            model.is_active == True,
+        ).distinct().all()
+        tags.update(r[0] for r in rows if r[0])
+    return sorted(tags)
+
+
+# ─── IMPORT WITH BATCH TAG ───
+@router.post("/seg1/import-tagged")
+@router.post("/seg2/import-tagged")
+@router.post("/seg3/import-tagged")
+async def import_with_batch_tag(
+    request: Request,
+    file: UploadFile = File(...),
+    batch_tag: str = Form(...),
+    segment: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_questions),
+):
+    """Import questions with a mandatory batch tag."""
+    import io, pandas as pd
+    content = await file.read()
+    filename = (file.filename or "").lower()
+    try:
+        df = pd.read_csv(io.BytesIO(content)) if filename.endswith(".csv") else pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"Could not read file: {e}")
+
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    df.dropna(how="all", inplace=True)
+
+    def _clean(text):
+        if not text: return text
+        import re
+        text = str(text).replace('\r\n','\n').replace('\r','\n')
+        text = text.replace('\u2018',"'").replace('\u2019',"'").replace('\u201c','"').replace('\u201d','"')
+        text = text.replace('\u2013','-').replace('\u2014','-').replace('\u00a0',' ')
+        text = re.sub(r'\n{3,}','\n\n', text)
+        return '\n'.join(line.rstrip() for line in text.split('\n')).strip()
+
+    _str = lambda rv, k, default="": _clean(str(rv[k])) if rv.get(k) not in (None, "") else default
+
+    created, errors = 0, []
+
+    for idx, row in df.iterrows():
+        rv = row.where(pd.notna(row), None).to_dict()
+        row_num = idx + 2
+        try:
+            if segment in (1, 2):
+                qt = _str(rv, "question_text")
+                if not qt: errors.append({"row": row_num, "error": "question_text required"}); continue
+                oa = _str(rv, "option_a"); ob = _str(rv, "option_b")
+                oc = _str(rv, "option_c"); od = _str(rv, "option_d")
+                ca = str(rv.get("correct_answer","")).strip().upper()
+                diff = str(rv.get("difficulty","medium")).strip().lower()
+                cat  = _str(rv, "category", None)
+                if segment == 1:
+                    q = models.QuestionSeg1(question_text=qt, option_a=oa, option_b=ob, option_c=oc, option_d=od,
+                                             correct_answer=ca, difficulty=diff, category=cat, batch_tag=batch_tag)
+                else:
+                    role_raw = str(rv.get("role_tags","")).strip()
+                    rtags = [t.strip() for t in role_raw.split(",") if t.strip()] if role_raw else []
+                    q = models.QuestionSeg2(question_text=qt, option_a=oa, option_b=ob, option_c=oc, option_d=od,
+                                             correct_answer=ca, difficulty=diff, category=cat, batch_tag=batch_tag,
+                                             role_tags=rtags or None)
+            else:
+                st = _str(rv, "scenario_text") or _str(rv, "question_text")
+                ra = _str(rv, "reference_answer") or _str(rv, "ideal_answer")
+                if not st: errors.append({"row": row_num, "error": "scenario_text required"}); continue
+                diff = str(rv.get("difficulty","high")).strip().lower()
+                q = models.QuestionSeg3(scenario_text=st, reference_answer=ra or "", difficulty=diff, batch_tag=batch_tag)
+
+            db.add(q); created += 1
+        except Exception as e:
+            errors.append({"row": row_num, "error": str(e)})
+
+    db.commit()
+    return {"created": created, "errors": errors, "batch_tag": batch_tag,
+            "message": f"{created} questions imported with tag '{batch_tag}'. {len(errors)} skipped."}

@@ -12,6 +12,7 @@ from app.database import Base
 class UserRole(str, enum.Enum):
     super_admin = "super_admin"
     admin = "admin"
+    qadmin = "qadmin"
     interviewer = "interviewer"
 
 
@@ -150,9 +151,10 @@ class QuestionSeg1(Base):
     option_b = Column(Text, nullable=False)
     option_c = Column(Text, nullable=False)
     option_d = Column(Text, nullable=False)
-    correct_answer = Column(String(1), nullable=False)  # A/B/C/D
-    difficulty = Column(String(10), nullable=False)      # low/medium/high
+    correct_answer = Column(String(1), nullable=False)
+    difficulty = Column(String(10), nullable=False)
     category = Column(String(100), nullable=True)
+    batch_tag = Column(String(100), nullable=True, index=True)
     experience_bracket_ids = Column(ARRAY(Integer), nullable=True)
     is_active = Column(Boolean, default=True)
     usage_count = Column(Integer, default=0)
@@ -172,6 +174,7 @@ class QuestionSeg2(Base):
     correct_answer = Column(String(1), nullable=False)
     difficulty = Column(String(10), nullable=False)
     category = Column(String(100), nullable=True)
+    batch_tag = Column(String(100), nullable=True, index=True)
     role_tags = Column(ARRAY(String), nullable=True)
     skill_tags = Column(ARRAY(String), nullable=True)
     experience_bracket_ids = Column(ARRAY(Integer), nullable=True)
@@ -188,6 +191,7 @@ class QuestionSeg3(Base):
     scenario_text = Column(Text, nullable=False)
     reference_answer = Column(Text, nullable=False)
     difficulty = Column(String(10), nullable=False)
+    batch_tag = Column(String(100), nullable=True, index=True)
     role_tags = Column(ARRAY(String), nullable=True)
     is_active = Column(Boolean, default=True)
     usage_count = Column(Integer, default=0)
@@ -287,6 +291,61 @@ class InstructionVersion(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
     creator = relationship("User")
+
+
+# ─────────────────────────── ROUND 2 ───────────────────────────
+class Round2Question(Base):
+    __tablename__ = "round2_questions"
+    id = Column(Integer, primary_key=True, index=True)
+    scenario_text = Column(Text, nullable=False)
+    reference_answer = Column(Text, nullable=False)
+    difficulty = Column(String(10), default='high')
+    category = Column(String(100), nullable=True)
+    batch_tag = Column(String(100), nullable=True, index=True)
+    domain_tag = Column(String(100), nullable=True)
+    is_active = Column(Boolean, default=True)
+    usage_count = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Round2Session(Base):
+    __tablename__ = "round2_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
+    session_token = Column(String(100), unique=True, index=True, nullable=False)
+    status = Column(String(30), default="INVITED")  # INVITED/IN_PROGRESS/SUBMITTED/EVALUATED
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    invited_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    proctoring_status = Column(String(30), default="active")
+    integrity_score = Column(Float, nullable=True)
+    violation_count = Column(Integer, default=0)
+    termination_reason = Column(String(200), nullable=True)
+    candidate = relationship("Candidate")
+    inviter = relationship("User", foreign_keys=[invited_by])
+
+
+class Round2Response(Base):
+    __tablename__ = "round2_responses"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("round2_sessions.id"), nullable=False)
+    question_id = Column(Integer, ForeignKey("round2_questions.id"), nullable=False)
+    question_order = Column(Integer, default=1)
+    free_text_response = Column(Text, nullable=True)
+    session = relationship("Round2Session")
+    question = relationship("Round2Question")
+
+
+class Round2Evaluation(Base):
+    __tablename__ = "round2_evaluations"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("round2_sessions.id"), unique=True)
+    question_details = Column(JSON, nullable=True)
+    overall_score = Column(Float, nullable=True)
+    ai_recommendation = Column(JSON, nullable=True)
+    evaluated_at = Column(DateTime(timezone=True), nullable=True)
+    session = relationship("Round2Session")
 
 
 # ─────────────────────────── AUDIT LOG ───────────────────────────

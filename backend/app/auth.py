@@ -72,6 +72,7 @@ def require_roles(*roles: str):
     return role_checker
 
 
-require_admin = require_roles("admin", "super_admin")
+require_admin      = require_roles("admin", "super_admin")
 require_super_admin = require_roles("super_admin")
-require_any_staff = require_roles("admin", "super_admin", "interviewer")
+require_any_staff  = require_roles("admin", "super_admin", "interviewer", "qadmin")
+require_questions  = require_roles("admin", "super_admin", "qadmin")  # question bank access

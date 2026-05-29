@@ -3,10 +3,15 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 // Candidate
+import Landing from './pages/candidate/Landing'
 import Registration from './pages/candidate/Registration'
 import Instructions from './pages/candidate/Instructions'
 import Assessment from './pages/candidate/Assessment'
 import ThankYou from './pages/candidate/ThankYou'
+import Round2Entry from './pages/candidate/Round2Entry'
+import Round2Instructions from './pages/candidate/Round2Instructions'
+import Round2Assessment from './pages/candidate/Round2Assessment'
+import Round2ThankYou from './pages/candidate/Round2ThankYou'
 
 // Admin
 import Login from './pages/admin/Login'
@@ -14,6 +19,8 @@ import Dashboard from './pages/admin/Dashboard'
 import CandidateList from './pages/admin/CandidateList'
 import CandidateDetail from './pages/admin/CandidateDetail'
 import QuestionBank from './pages/admin/QuestionBank'
+import Round2Questions from './pages/admin/Round2Questions'
+import Round2Candidates from './pages/admin/Round2Candidates'
 import Requisitions from './pages/admin/Requisitions'
 import Analytics from './pages/admin/Analytics'
 import Settings from './pages/admin/Settings'
@@ -42,29 +49,32 @@ export default function App() {
           }}
         />
         <Routes>
-          {/* Candidate Portal (no auth) */}
-          <Route path="/" element={<Registration />} />
+          {/* Candidate Portal */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/register" element={<Registration />} />
           <Route path="/instructions/:sessionToken" element={<Instructions />} />
           <Route path="/assessment/:sessionToken" element={<Assessment />} />
           <Route path="/thankyou" element={<ThankYou />} />
 
+          {/* Round 2 Candidate Portal */}
+          <Route path="/round2" element={<Round2Entry />} />
+          <Route path="/round2/instructions/:token" element={<Round2Instructions />} />
+          <Route path="/round2/assessment/:token" element={<Round2Assessment />} />
+          <Route path="/round2/thankyou" element={<Round2ThankYou />} />
+
           {/* Admin Portal */}
           <Route path="/admin/login" element={<Login />} />
-          <Route path="/admin" element={
-            <ProtectedRoute><AdminLayout /></ProtectedRoute>
-          }>
+          <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="candidates" element={<CandidateList />} />
             <Route path="candidates/:sessionId" element={<CandidateDetail />} />
+            <Route path="r2/candidates" element={<Round2Candidates />} />
+            <Route path="r2/questions" element={<Round2Questions />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="requisitions" element={<Requisitions />} />
             <Route path="questions" element={<QuestionBank />} />
-            <Route path="settings" element={
-              <ProtectedRoute requireAdmin><Settings /></ProtectedRoute>
-            } />
-            <Route path="users" element={
-              <ProtectedRoute requireSuperAdmin><UserManagement /></ProtectedRoute>
-            } />
+            <Route path="settings" element={<ProtectedRoute requireAdmin><Settings /></ProtectedRoute>} />
+            <Route path="users" element={<ProtectedRoute requireSuperAdmin><UserManagement /></ProtectedRoute>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

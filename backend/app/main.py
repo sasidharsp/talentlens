@@ -10,6 +10,7 @@ from app.auth import get_password_hash
 from app.config import settings
 from app.routers import auth, candidates, admin, questions
 from app.routers import requisitions as req_router
+from app.routers import round2_admin, round2_candidate
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
@@ -37,6 +38,8 @@ app.include_router(candidates.router)
 app.include_router(admin.router)
 app.include_router(questions.router)
 app.include_router(req_router.router)
+app.include_router(round2_admin.router)
+app.include_router(round2_candidate.router)
 
 # Serve uploaded files
 os.makedirs(settings.upload_dir, exist_ok=True)
@@ -63,6 +66,11 @@ def seed_defaults():
             "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS violation_count INTEGER DEFAULT 0",
             "ALTER TABLE assessment_sessions ADD COLUMN IF NOT EXISTS termination_reason VARCHAR(200)",
             "ALTER TABLE evaluation_results ADD COLUMN IF NOT EXISTS ai_recommendation JSONB",
+            "ALTER TABLE questions_seg1 ADD COLUMN IF NOT EXISTS batch_tag VARCHAR(100)",
+            "ALTER TABLE questions_seg2 ADD COLUMN IF NOT EXISTS batch_tag VARCHAR(100)",
+            "ALTER TABLE questions_seg3 ADD COLUMN IF NOT EXISTS batch_tag VARCHAR(100)",
+            # Add qadmin to the role enum if using PostgreSQL enum type
+            "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel='qadmin' AND enumtypid=(SELECT oid FROM pg_type WHERE typname='userrole')) THEN ALTER TYPE userrole ADD VALUE 'qadmin'; END IF; END $$",
         ]
         for sql in migrations:
             try:

@@ -1077,3 +1077,31 @@ Return ONLY the JSON object. Be honest, specific, and BFSI-domain aware."""
     db.commit()
 
     return rec
+
+# ─────────────── ROUND 2 STATUS FOR CANDIDATE DETAIL ───────────────
+@router.get("/candidates/{session_id}/r2-status")
+def get_r2_status(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    """Get Round 2 invitation/completion status for a candidate."""
+    session = db.query(models.AssessmentSession).filter_by(id=session_id).first()
+    if not session: raise HTTPException(404, "Not found")
+
+    r2 = db.query(models.Round2Session).filter_by(
+        candidate_id=session.candidate_id
+    ).order_by(models.Round2Session.id.desc()).first()
+
+    if not r2: return {"r2_status": None, "r2_session_id": None}
+
+    r2_eval = db.query(models.Round2Evaluation).filter_by(session_id=r2.id).first()
+    rec = r2_eval.ai_recommendation if r2_eval and r2_eval.ai_recommendation else {}
+
+    return {
+        "r2_status": r2.status,
+        "r2_session_id": r2.id,
+        "r2_score": r2_eval.overall_score if r2_eval else None,
+        "r2_verdict": rec.get("recommendation"),
+        "r2_invited_at": r2.invited_at,
+    }

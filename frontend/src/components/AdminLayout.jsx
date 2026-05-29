@@ -2,26 +2,30 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase, BarChart2
+  LogOut, Zap, Briefcase, BarChart2, Award
 } from 'lucide-react';
 
-const navItems = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/admin/analytics', label: 'Analytics', icon: BarChart2 },
-  { to: '/admin/candidates', label: 'Candidates', icon: Users },
-  { to: '/admin/requisitions', label: 'Requisitions', icon: Briefcase },
-  { to: '/admin/questions', label: 'Question Bank', icon: BookOpen },
-  { to: '/admin/settings', label: 'Settings', icon: Settings, adminOnly: true },
+const allNavItems = [
+  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true, roles: ['admin','super_admin'] },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart2, roles: ['admin','super_admin'] },
+  { to: '/admin/candidates', label: 'Candidates', icon: Users, roles: ['admin','super_admin','interviewer'] },
+  { to: '/admin/r2/candidates', label: 'Round 2', icon: Award, roles: ['admin','super_admin','interviewer'] },
+  { to: '/admin/requisitions', label: 'Requisitions', icon: Briefcase, roles: ['admin','super_admin'] },
+  { to: '/admin/questions', label: 'Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
+  { to: '/admin/r2/questions', label: 'R2 Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
+  { to: '/admin/settings', label: 'Settings', icon: Settings, roles: ['admin','super_admin'] },
 ];
 
 export default function AdminLayout() {
-  const { user, logout, isAdmin, isSuperAdmin } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin, isQAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => { logout(); navigate('/admin/login'); };
 
-  const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : 'Interviewer';
-  const roleBg = isSuperAdmin ? 'badge-violet' : isAdmin ? 'badge-indigo' : 'badge-gray';
+  const role = user?.role || '';
+  const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : isQAdmin ? 'Question Admin' : 'Interviewer';
+  const roleBg = isSuperAdmin ? 'badge-violet' : isAdmin ? 'badge-indigo' : isQAdmin ? 'badge-amber' : 'badge-gray';
+  const navItems = allNavItems.filter(item => item.roles.includes(role));
 
   return (
     <div className="admin-wrap">
@@ -49,8 +53,8 @@ export default function AdminLayout() {
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 12px 8px' }}>
             Navigation
           </div>
-          {navItems.map(({ to, label, icon: Icon, exact, adminOnly }) => {
-            if (adminOnly && !isAdmin && !isSuperAdmin) return null;
+          {navItems.map(({ to, label, icon: Icon, exact }) => {
+            
             return (
               <NavLink
                 key={to}

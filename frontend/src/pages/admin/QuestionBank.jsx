@@ -4,7 +4,7 @@ import { downloadFile } from '../../api/download';
 import {
   Plus, Upload, Download, Trash2, BookOpen,
   FileSpreadsheet, AlertTriangle, CheckCircle2,
-  RefreshCw, X, AlertCircle
+  RefreshCw, X, AlertCircle, Tag, Search
 } from 'lucide-react';
 
 const SEG_CONFIG = {
@@ -15,8 +15,8 @@ const SEG_CONFIG = {
 
 const emptyForm = (seg) => seg < 3
   ? { question_text:'', option_a:'', option_b:'', option_c:'', option_d:'',
-      correct_answer:'A', difficulty:'medium', category:'', role_tags:'', skill_tags:'' }
-  : { scenario_text:'', reference_answer:'', difficulty:'medium', role_tags:'' };
+      correct_answer:'A', difficulty:'medium', category:'', batch_tag:'', role_tags:'', skill_tags:'' }
+  : { scenario_text:'', reference_answer:'', difficulty:'medium', batch_tag:'', role_tags:'' };
 
 // ── Purge confirmation modal ──────────────────────────────────────────────────
 function PurgeModal({ seg, count, onConfirm, onCancel, loading }) {
@@ -132,19 +132,36 @@ export default function QuestionBank() {
   const [importResult, setImportResult] = useState(null);
   const [purgeModal, setPurgeModal]     = useState(false);
   const [purging, setPurging]           = useState(false);
+  // Batch tag state
+  const [allTags, setAllTags]       = useState([]);
+  const [activeTag, setActiveTag]   = useState('');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importBatchTag, setImportBatchTag]   = useState('');
+  const [importFile, setImportFile]           = useState(null);
+  const [importing, setImporting]             = useState(false);
   const fileRef = useRef();
 
-  const load = async (s = seg, p = page) => {
+  const loadTags = () => api.get('/admin/questions/batch-tags').then(r => setAllTags(r.data || [])).catch(() => {});
+
+  const load = async (s = seg, p = page, tag = activeTag) => {
     setLoading(true);
     try {
-      const r = await api.get(`/admin/questions/seg${s}?page=${p}&page_size=20`);
+      const params = new URLSearchParams({ page: p, page_size: 20 });
+      if (tag) params.set('batch_tag', tag);
+      const r = await api.get(`/admin/questions/seg${s}?${params}`);
       setQuestions(r.data.items || []);
       setTotal(r.data.total || 0);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(seg, 1); setPage(1); setShowAdd(false); setForm(emptyForm(seg)); setImportResult(null); }, [seg]);
-  useEffect(() => { load(seg, page); }, [page]);
+  useEffect(() => { load(seg, 1, ''); setPage(1); setActiveTag(''); setShowAdd(false); setForm(emptyForm(seg)); setImportResult(null); loadTags(); }, [seg]);
+  useEffect(() => { load(seg, page, activeTag); }, [page]);
+
+  const filterByTag = (tag) => {
+    const newTag = tag === activeTag ? '' : tag;
+    setActiveTag(newTag); setPage(1);
+    load(seg, 1, newTag);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -153,34 +170,36 @@ export default function QuestionBank() {
       if (form.role_tags)  payload.role_tags  = form.role_tags.split(',').map(s => s.trim()).filter(Boolean);
       if (form.skill_tags) payload.skill_tags = form.skill_tags.split(',').map(s => s.trim()).filter(Boolean);
       await api.post(`/admin/questions/seg${seg}`, payload);
-      setShowAdd(false); setForm(emptyForm(seg)); load(seg, page);
+      setShowAdd(false); setForm(emptyForm(seg)); load(seg, page, activeTag); loadTags();
     } finally { setSaving(false); }
   };
 
   const del = async (id) => {
-    if (!confirm('Soft-delete this question?')) return;
+    if (!confirm('Delete this question?')) return;
     await api.delete(`/admin/questions/seg${seg}/${id}`);
-    load(seg, page);
+    load(seg, page, activeTag);
   };
 
-  const doImport = async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    setImportResult(null);
-    const fd = new FormData(); fd.append('file', f);
+  const doImport = async () => {
+    if (!importFile) return;
+    if (!importBatchTag.trim()) { alert('Please enter a batch tag.'); return; }
+    setImporting(true); setImportResult(null);
+    const fd = new FormData();
+    fd.append('file', importFile);
+    fd.append('batch_tag', importBatchTag.trim());
+    fd.append('segment', seg);
     try {
-      const r = await api.post(`/admin/questions/seg${seg}/import`, fd, {
+      const r = await api.post(`/admin/questions/import-tagged`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setImportResult(r.data);
-      load(seg, 1); setPage(1);
+      setShowImportModal(false); setImportFile(null); setImportBatchTag('');
+      load(seg, 1, ''); setPage(1); loadTags();
     } catch (ex) {
-      setImportResult({
-        message: ex.response?.data?.detail || 'Import failed. Please check your file format.',
-        imported: 0,
-        errors: [],
-      });
-    }
-    e.target.value = '';
+      setImportResult({ message: ex.response?.data?.detail || 'Import failed.', created: 0, errors: [] });
+      setShowImportModal(false);
+    } finally { setImporting(false); }
+    fileRef.current.value = '';
   };
 
   const doPurge = async () => {
@@ -189,7 +208,7 @@ export default function QuestionBank() {
       const r = await api.delete(`/admin/questions/seg${seg}/purge`);
       setPurgeModal(false);
       setImportResult({ message: r.data.message, imported: 0, errors: [] });
-      load(seg, 1); setPage(1);
+      load(seg, 1, ''); setPage(1); loadTags();
     } finally { setPurging(false); }
   };
 
@@ -204,6 +223,50 @@ export default function QuestionBank() {
           onConfirm={doPurge} onCancel={() => setPurgeModal(false)}
           loading={purging}
         />
+      )}
+
+      {/* Import modal with batch tag */}
+      {showImportModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+          <div style={{ background:'var(--surface)', borderRadius:14, padding:32, width:460, boxShadow:'var(--shadow-lg)', border:'1px solid var(--border)' }}>
+            <div style={{ fontWeight:700, fontSize:16, color:'var(--text)', marginBottom:6, display:'flex', alignItems:'center', gap:8 }}>
+              <Tag size={18} color="var(--primary)" /> Import — Batch Tag Required
+            </div>
+            <div style={{ fontSize:13, color:'var(--text-2)', marginBottom:20, lineHeight:1.6 }}>
+              All questions in <strong>{importFile?.name}</strong> will be tagged together.<br/>
+              Use the batch tag to find and filter this group later.
+            </div>
+            <label className="label">
+              Batch Tag <span style={{color:'var(--danger)'}}>*</span>
+              <span style={{ fontSize:11, color:'var(--text-3)', fontWeight:400, marginLeft:4 }}>e.g. BFSI-Java-L2-Jun2025</span>
+            </label>
+            <input className="input" placeholder="Enter a unique tag for this batch…"
+              value={importBatchTag} onChange={e => setImportBatchTag(e.target.value)}
+              style={{ marginBottom:12, fontFamily:'monospace', fontWeight:600, letterSpacing:'0.03em' }} autoFocus />
+            {allTags.length > 0 && (
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:11, color:'var(--text-3)', marginBottom:6, fontWeight:600 }}>Or reuse an existing tag:</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {allTags.map(t => (
+                    <button key={t} type="button" onClick={() => setImportBatchTag(t)}
+                      style={{ fontSize:11, padding:'3px 10px', borderRadius:99, background: importBatchTag===t ? 'var(--primary)' : 'var(--primary-light)',
+                        color: importBatchTag===t ? '#fff' : 'var(--primary)', border:'1px solid var(--primary-border)', cursor:'pointer', fontFamily:'monospace' }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ display:'flex', gap:8, marginTop:8 }}>
+              <button className="btn btn-primary" onClick={doImport} disabled={importing || !importBatchTag.trim()}>
+                {importing ? <><span className="spinner" style={{width:14,height:14}}/>Importing…</> : <><Upload size={14}/> Import</>}
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setShowImportModal(false); setImportFile(null); fileRef.current.value=''; }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="admin-topbar">
@@ -221,8 +284,9 @@ export default function QuestionBank() {
             <FileSpreadsheet size={14} /> Download Template
           </button>
 
-          {/* Import */}
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={doImport} />
+          {/* Import — triggers modal for batch tag */}
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }}
+            onChange={e => { if (e.target.files[0]) { setImportFile(e.target.files[0]); setShowImportModal(true); } }} />
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current.click()}>
             <Upload size={14} /> Import Excel
           </button>
@@ -272,6 +336,42 @@ export default function QuestionBank() {
 
         {/* Import result */}
         <ImportResult result={importResult} onClose={() => setImportResult(null)} />
+
+        {/* Batch tag filter chips */}
+        {allTags.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Tag size={12} /> Batch Tags
+              </div>
+              <button
+                onClick={() => filterByTag('')}
+                style={{ fontSize: 12, padding: '4px 12px', borderRadius: 99, cursor: 'pointer',
+                  background: !activeTag ? 'var(--primary)' : 'var(--surface-2)',
+                  color: !activeTag ? '#fff' : 'var(--text-2)',
+                  border: `1px solid ${!activeTag ? 'var(--primary)' : 'var(--border)'}`,
+                  fontWeight: !activeTag ? 700 : 400 }}>
+                All
+              </button>
+              {allTags.map(tag => (
+                <button key={tag}
+                  onClick={() => filterByTag(tag)}
+                  style={{ fontSize: 12, padding: '4px 12px', borderRadius: 99, cursor: 'pointer', fontFamily: 'monospace',
+                    background: activeTag === tag ? 'var(--primary)' : 'var(--surface-2)',
+                    color: activeTag === tag ? '#fff' : 'var(--primary)',
+                    border: `1px solid ${activeTag === tag ? 'var(--primary)' : 'var(--primary-border)'}`,
+                    fontWeight: activeTag === tag ? 700 : 400 }}>
+                  {tag}
+                </button>
+              ))}
+              {activeTag && (
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  — showing {total} questions in <strong>{activeTag}</strong>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Template hint banner */}
         {total === 0 && !loading && (
@@ -350,6 +450,18 @@ export default function QuestionBank() {
                   <option value="high">High</option>
                 </select>
               </div>
+              <div>
+                <label className="label">
+                  Batch Tag
+                  <span style={{ fontSize:11, color:'var(--text-3)', fontWeight:400, marginLeft:4 }}>— groups this question for easy search</span>
+                </label>
+                <input className="input" placeholder="e.g. BFSI-Java-L2-Jun2025"
+                  value={form.batch_tag} onChange={e => setForm(f => ({...f, batch_tag: e.target.value}))}
+                  list="batch-tag-suggestions" style={{ fontFamily:'monospace' }} />
+                <datalist id="batch-tag-suggestions">
+                  {allTags.map(t => <option key={t} value={t} />)}
+                </datalist>
+              </div>
               {isSeg3 && (
                 <div>
                   <label className="label">Role Tags <span style={{ fontSize: 11, color: 'var(--text-3)' }}>(comma-separated)</span></label>
@@ -379,7 +491,7 @@ export default function QuestionBank() {
                   <tr>
                     <th style={{ width: 40 }}>#</th>
                     <th>{isSeg3 ? 'Scenario' : 'Question'}</th>
-                    <th>Difficulty</th>
+                    <th>Difficulty</th><th>Batch Tag</th>
                     <th>{isSeg3 ? 'Role Tags' : 'Category'}</th>
                     {!isSeg3 && <th style={{ width: 60 }}>Answer</th>}
                     <th style={{ width: 60 }}>Used</th>
@@ -402,6 +514,11 @@ export default function QuestionBank() {
                         <span className={`badge ${q.difficulty === 'high' ? 'badge-red' : q.difficulty === 'medium' ? 'badge-amber' : 'badge-green'}`}>
                           {q.difficulty}
                         </span>
+                        </td>
+                        <td>
+                          {q.batch_tag
+                            ? <button onClick={() => filterByTag(q.batch_tag)} style={{ fontSize:11, padding:'2px 8px', borderRadius:99, background:'var(--primary-light)', color:'var(--primary)', border:'1px solid var(--primary-border)', cursor:'pointer', fontFamily:'monospace' }}>{q.batch_tag}</button>
+                            : <span style={{ color:'var(--text-3)', fontSize:12 }}>—</span>}
                       </td>
                       <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
                         {isSeg3 ? (q.role_tags || []).join(', ') || '—' : q.category || '—'}
