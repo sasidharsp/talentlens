@@ -134,3 +134,12 @@ textarea.input { resize: vertical; min-height: 96px; }
 .seg-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 2px solid var(--border); color: var(--text-3); background: var(--surface); }
 .seg-dot.done { background: var(--success); border-color: var(--success); color: #fff; }
 .seg-dot.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+/* ── Rich text instruction content ── */
+.instruction-content h1, .instruction-content h2, .instruction-content h3 {
+  font-family: 'DM Serif Display', serif; color: var(--text); margin: 12px 0 6px;
+}
+.instruction-content p { margin-bottom: 8px; line-height: 1.7; }
+.instruction-content ul, .instruction-content ol { padding-left: 20px; margin-bottom: 8px; }
+.instruction-content li { margin-bottom: 4px; line-height: 1.7; }
+.instruction-content strong { color: var(--text); font-weight: 600; }
