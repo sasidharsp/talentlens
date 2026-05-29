@@ -8,7 +8,7 @@ export default function Registration() {
   const [requisitions, setRequisitions] = useState([]);
   const [form, setForm] = useState({
     full_name:'', email:'', mobile:'', requisition_id:'', years_of_experience:'',
-    current_organization:'', highest_qualification:'', linkedin_url:''
+    current_organization:''
   });
   const [file, setFile] = useState(null);
   const [webcamPhoto, setWebcamPhoto] = useState(null);
@@ -73,18 +73,6 @@ export default function Registration() {
             </p>
           </div>
 
-          {/* Steps preview */}
-          <div style={{ display: 'flex', gap: 0, marginBottom: 32, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            {[['Segment 1','15 MCQ · Knowledge','~45 min'], ['Segment 2','10 MCQ · Role Fit','~80 min'], ['Segment 3','2 Scenarios','~8 min']].map(([s,d,t], i) => (
-              <div key={s} style={{ flex: 1, padding: '16px 20px', borderRight: i < 2 ? '1px solid var(--border)' : 'none', textAlign: 'center' }}>
-                <div style={{ display: 'inline-flex', width: 28, height: 28, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{i+1}</div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{s}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>{d}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{t}</div>
-              </div>
-            ))}
-          </div>
-
           <div className="portal-card" style={{ padding: 32 }}>
             {error && (
               <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)', marginBottom: 20 }}>
@@ -105,8 +93,6 @@ export default function Registration() {
                   </select>
                 </div>
                 <div><label className="label">Current Organisation</label><input className="input" value={form.current_organization} onChange={e=>set('current_organization',e.target.value)} placeholder="Optional" /></div>
-                <div><label className="label">Highest Qualification</label><input className="input" value={form.highest_qualification} onChange={e=>set('highest_qualification',e.target.value)} placeholder="e.g. B.Tech, MBA" /></div>
-                <div><label className="label">LinkedIn URL</label><input className="input" value={form.linkedin_url} onChange={e=>set('linkedin_url',e.target.value)} placeholder="https://linkedin.com/in/…" /></div>
               </div>
 
               {/* Webcam photo */}

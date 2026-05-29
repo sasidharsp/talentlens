@@ -45,7 +45,7 @@ async def register_candidate(
     mobile: str = Form(...),
     requisition_id: Optional[int] = Form(None),
     role_id: Optional[int] = Form(None),          # kept for backward compat
-    years_of_experience: float = Form(...),
+    years_of_experience: Optional[float] = Form(0.0),
     current_organization: Optional[str] = Form(None),
     highest_qualification: Optional[str] = Form(None),
     linkedin_url: Optional[str] = Form(None),
@@ -106,7 +106,7 @@ async def register_candidate(
         mobile=mobile,
         role_id=role_id,
         requisition_id=requisition_id,
-        years_of_experience=years_of_experience,
+        years_of_experience=years_of_experience or 0.0,
         current_organization=current_organization,
         highest_qualification=highest_qualification,
         linkedin_url=linkedin_url,
