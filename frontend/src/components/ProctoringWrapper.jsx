@@ -144,20 +144,24 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
         const { action, flag_reason, notes } = res.data;
 
         if (action === 'terminate') {
-          doTerminate('Auto-terminated: Mobile device detected during assessment');
+          doTerminate('Auto-terminated: Proctoring violation detected');
         } else if (action === 'warn_phone') {
-          showWarning('📱 Mobile device detected! This is your first warning. A second detection will terminate your session.', 6000);
-          logEvent('phone_detected', notes || 'Phone visible in webcam');
-        } else if (flag_reason === 'person_absent') {
-          showWarning('⚠️ Please remain in front of your camera during the assessment.', 4000);
+          showWarning('📱 Mobile device detected! Warning 1/2 — a second detection will terminate your session.', 7000);
+          logEvent('phone_detected', notes || 'Phone visible');
+        } else if (action === 'warn_gaze') {
+          showWarning('👁️ Please keep your eyes on the screen. Looking away has been recorded (1/3).', 5000);
+        } else if (action === 'warn_gaze_final') {
+          showWarning('⚠️ Final warning — looking away recorded (2/3). One more will terminate your session.', 7000);
+        } else if (action === 'warn_absent') {
+          showWarning('⚠️ Please remain in front of your camera throughout the assessment.', 5000);
         }
       } catch (e) { /* silent — never let snapshot errors affect assessment */ }
     };
 
-    // Random interval between 15–25 seconds
+    // Random interval 8–12 seconds (avg 10)
     let timeoutId;
     const schedule = () => {
-      const delay = 15000 + Math.random() * 10000;
+      const delay = 8000 + Math.random() * 4000;
       timeoutId = setTimeout(async () => {
         await captureAndSend();
         if (!terminatedRef.current) schedule();
@@ -165,7 +169,7 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
     };
 
     // First snapshot after 20 seconds
-    timeoutId = setTimeout(() => { captureAndSend(); schedule(); }, 20000);
+    timeoutId = setTimeout(() => { captureAndSend(); schedule(); }, 10000);
     return () => clearTimeout(timeoutId);
   }, [token, webcamError]);
   useEffect(() => {

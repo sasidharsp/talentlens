@@ -700,12 +700,14 @@ async def submit_proctor_snapshot(
                         "type": "text",
                         "text": (
                             "This is a webcam frame from a proctored online assessment. "
-                            "Return ONLY valid JSON:\n"
+                            "Analyse carefully and return ONLY valid JSON:\n"
                             "{\n"
-                            '  "phone_visible": <true if any mobile phone or handheld device is visible>,\n'
-                            '  "person_present": <true if a person\'s face is clearly visible>,\n'
-                            '  "looking_at_screen": <true if the person appears to be looking at the computer screen>,\n'
-                            '  "notes": "<one short observation, max 8 words>"\n'
+                            '  "phone_visible": <true if ANY mobile phone or handheld device is visible anywhere in frame>,\n'
+                            '  "person_present": <true if a person\'s face is clearly visible and centred>,\n'
+                            '  "looking_at_screen": <true ONLY if the candidate\'s eyes are directed straight toward the camera/screen. '
+                            'Set FALSE if they are looking sideways (second monitor), looking down (notes/desk/phone), '
+                            'looking up, or head is turned more than 20 degrees from camera. Be strict.>,\n'
+                            '  "notes": "<one observation, max 8 words>"\n'
                             "}"
                         ),
                     },
@@ -743,19 +745,20 @@ async def submit_proctor_snapshot(
     )
     db.add(snap)
 
-    # ── Auto-terminate on 2+ phone detections ──
+    # ── Thresholds: phone → terminate at 2x | looking_away → terminate at 3x ──
     action = "continue"
+
     if flag_reason == "phone_detected":
         db.add(models.ProctorEvent(
             session_id=session.id,
             event_type="phone_detected",
             details=analysis.get("notes", ""),
         ))
+        db.flush()
         phone_count = db.query(models.ProctorSnapshot).filter(
             models.ProctorSnapshot.session_id == session.id,
             models.ProctorSnapshot.flag_reason == "phone_detected",
-        ).count() + 1  # +1 for current snap not yet committed
-
+        ).count()
         if phone_count >= 2:
             session.proctoring_status = "terminated"
             session.status = "SUBMITTED"
@@ -764,6 +767,36 @@ async def submit_proctor_snapshot(
             action = "terminate"
         else:
             action = "warn_phone"
+
+    elif flag_reason == "looking_away":
+        db.add(models.ProctorEvent(
+            session_id=session.id,
+            event_type="gaze_violation",
+            details=f"Looking away from screen: {analysis.get('notes', '')}",
+        ))
+        db.flush()
+        gaze_count = db.query(models.ProctorSnapshot).filter(
+            models.ProctorSnapshot.session_id == session.id,
+            models.ProctorSnapshot.flag_reason == "looking_away",
+        ).count()
+        if gaze_count >= 3:
+            session.proctoring_status = "terminated"
+            session.status = "SUBMITTED"
+            session.submitted_at = datetime.utcnow()
+            session.termination_reason = f"Auto-terminated: Repeated gaze violations ({gaze_count}x) — possible second screen"
+            action = "terminate"
+        elif gaze_count == 2:
+            action = "warn_gaze_final"
+        else:
+            action = "warn_gaze"
+
+    elif flag_reason == "person_absent":
+        db.add(models.ProctorEvent(
+            session_id=session.id,
+            event_type="person_absent",
+            details=analysis.get("notes", ""),
+        ))
+        action = "warn_absent"
 
     db.commit()
     return {
