@@ -640,7 +640,7 @@ async def bulk_import_candidates(
         "message": f"{len(created)} candidate(s) imported. {len(errors)} skipped.",
     }
 
-# ─── PROCTOR SNAPSHOT (AI phone/absence detection) ───
+# ─── PROCTOR SNAPSHOT (stores frame + applies termination logic) ───
 @router.post("/proctor-snapshot/{session_token}")
 async def submit_proctor_snapshot(
     session_token: str,
@@ -648,16 +648,16 @@ async def submit_proctor_snapshot(
     db: Session = Depends(get_db),
 ):
     """
-    Receive a periodic webcam snapshot during assessment.
-    1. Run Claude Vision to detect phone / absence / looking away
-    2. Store compressed thumbnail + analysis in DB
-    3. Auto-terminate if phone detected 2+ times
+    Stores a webcam snapshot. Detection is now done client-side
+    by ProctorEngine (COCO-SSD + face-api.js). Backend just:
+    1. Compresses and stores the thumbnail
+    2. Applies termination thresholds if is_violation=True
     """
     session = _get_session_or_404(db, session_token)
     if session.status not in ("IN_PROGRESS", "REGISTERED"):
         return {"action": "continue"}
 
-    import base64, io, anthropic as anthropic_sdk
+    import base64, io
 
     raw_b64 = payload.get("image_data", "")
     if raw_b64.startswith("data:image"):
@@ -665,7 +665,11 @@ async def submit_proctor_snapshot(
     if not raw_b64:
         return {"action": "continue"}
 
-    # ── Compress to thumbnail for storage (~5KB) ──
+    flag_reason  = payload.get("flag_reason")   # set by ProctorEngine
+    is_violation = payload.get("is_violation", False)
+
+    # ── Compress to thumbnail (~5KB) for admin strip ──
+    thumbnail_b64 = None
     try:
         from PIL import Image as PILImage
         img_bytes = base64.b64decode(raw_b64)
@@ -675,145 +679,54 @@ async def submit_proctor_snapshot(
         img.save(buf, format="JPEG", quality=40)
         thumbnail_b64 = base64.b64encode(buf.getvalue()).decode()
     except Exception:
-        thumbnail_b64 = raw_b64[:2000]  # fallback — just store truncated
-
-    # ── Claude Vision — run on every other snapshot to control cost ──
-    # Even-numbered snapshots get AI analysis (~every 10 sec), odd ones just store thumbnail
-    existing_count = db.query(models.ProctorSnapshot).filter_by(session_id=session.id).count()
-    run_ai = (existing_count % 2 == 0)
-
-    analysis = {"phone_visible": False, "person_present": True,
-                "looking_at_screen": True, "notes": ""}
-    if run_ai:
-        try:
-            client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
-            message = client.messages.create(
-                model=settings.llm_model,
-                max_tokens=150,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": raw_b64,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "This is a webcam frame from a proctored online assessment. "
-                                "The candidate should be looking DIRECTLY at the screen/camera at all times. "
-                                "Analyse carefully and return ONLY valid JSON:\n"
-                                "{\n"
-                                '  "phone_visible": <true if ANY mobile phone, tablet or handheld device is visible>,\n'
-                                '  "person_present": <true if a person\'s face is clearly visible>,\n'
-                                '  "looking_at_screen": <true ONLY if eyes are aimed straight at the camera. '
-                                'Set FALSE for ANY of: head turned sideways even slightly, eyes looking left/right, '
-                                'looking down at desk/keyboard, looking up, reading from paper/notes, '
-                                'talking to someone off-screen, or head tilted more than 10 degrees>,\n'
-                                '  "distraction_visible": <true if hands are raised to face/ear, '
-                                'another person is visible, or candidate appears to be talking>,\n'
-                                '  "notes": "<one specific observation, max 8 words>"\n'
-                                "}"
-                            ),
-                        },
-                    ],
-                }],
-            )
-            raw = message.content[0].text.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"): raw = raw[4:]
-            analysis = json.loads(raw.strip())
-        except Exception as e:
-            analysis["vision_error"] = str(e)[:100]
-
-    # ── Determine flag ──
-    is_flagged = False
-    flag_reason = None
-    if analysis.get("phone_visible"):
-        is_flagged = True
-        flag_reason = "phone_detected"
-    elif not analysis.get("person_present"):
-        is_flagged = True
-        flag_reason = "person_absent"
-    elif not analysis.get("looking_at_screen"):
-        is_flagged = True
-        flag_reason = "looking_away"
-    elif analysis.get("distraction_visible"):
-        is_flagged = True
-        flag_reason = "distraction"
+        thumbnail_b64 = raw_b64[:2000]
 
     # ── Save snapshot ──
     snap = models.ProctorSnapshot(
         session_id=session.id,
         thumbnail_b64=thumbnail_b64,
-        is_flagged=is_flagged,
+        is_flagged=bool(is_violation and flag_reason),
         flag_reason=flag_reason,
-        analysis=analysis,
+        analysis={"source": "ProctorEngine", "client_detected": True}
+            if is_violation else {"source": "periodic"},
     )
     db.add(snap)
 
-    # ── Thresholds: phone → terminate at 2x | looking_away → terminate at 3x ──
+    # ── Termination thresholds ──
     action = "continue"
-
-    if flag_reason == "phone_detected":
+    if is_violation and flag_reason:
         db.add(models.ProctorEvent(
             session_id=session.id,
-            event_type="phone_detected",
-            details=analysis.get("notes", ""),
+            event_type=flag_reason,
+            details=payload.get("details", ""),
         ))
         db.flush()
-        phone_count = db.query(models.ProctorSnapshot).filter(
-            models.ProctorSnapshot.session_id == session.id,
-            models.ProctorSnapshot.flag_reason == "phone_detected",
-        ).count()
-        if phone_count >= 2:
-            session.proctoring_status = "terminated"
-            session.status = "SUBMITTED"
-            session.submitted_at = datetime.utcnow()
-            session.termination_reason = f"Auto-terminated: Mobile device detected {phone_count} times"
-            action = "terminate"
-        else:
-            action = "warn_phone"
 
-    elif flag_reason == "looking_away":
-        db.add(models.ProctorEvent(
-            session_id=session.id,
-            event_type="gaze_violation",
-            details=f"Looking away from screen: {analysis.get('notes', '')}",
-        ))
-        db.flush()
-        gaze_count = db.query(models.ProctorSnapshot).filter(
-            models.ProctorSnapshot.session_id == session.id,
-            models.ProctorSnapshot.flag_reason == "looking_away",
-        ).count()
-        if gaze_count >= 3:
-            session.proctoring_status = "terminated"
-            session.status = "SUBMITTED"
-            session.submitted_at = datetime.utcnow()
-            session.termination_reason = f"Auto-terminated: Repeated gaze violations ({gaze_count}x) — possible second screen"
-            action = "terminate"
-        elif gaze_count == 2:
-            action = "warn_gaze_final"
-        else:
-            action = "warn_gaze"
+        if flag_reason in ("terminated", "phone_detected"):
+            phone_count = db.query(models.ProctorSnapshot).filter(
+                models.ProctorSnapshot.session_id == session.id,
+                models.ProctorSnapshot.flag_reason == "phone_detected",
+            ).count()
+            if flag_reason == "terminated" or phone_count >= 2:
+                session.proctoring_status = "terminated"
+                session.status = "SUBMITTED"
+                session.submitted_at = datetime.utcnow()
+                session.termination_reason = payload.get(
+                    "details", f"Auto-terminated: {flag_reason}"
+                )
+                action = "terminate"
 
-    elif flag_reason == "person_absent":
-        db.add(models.ProctorEvent(
-            session_id=session.id,
-            event_type="person_absent",
-            details=analysis.get("notes", ""),
-        ))
-        action = "warn_absent"
+        elif flag_reason == "looking_away":
+            gaze_count = db.query(models.ProctorSnapshot).filter(
+                models.ProctorSnapshot.session_id == session.id,
+                models.ProctorSnapshot.flag_reason == "looking_away",
+            ).count()
+            if gaze_count >= 3:
+                session.proctoring_status = "terminated"
+                session.status = "SUBMITTED"
+                session.submitted_at = datetime.utcnow()
+                session.termination_reason = f"Auto-terminated: Repeated gaze violations ({gaze_count}x)"
+                action = "terminate"
 
     db.commit()
-    return {
-        "action": action,
-        "is_flagged": is_flagged,
-        "flag_reason": flag_reason,
-        "notes": analysis.get("notes", ""),
-    }
+    return {"action": action, "flag_reason": flag_reason}
