@@ -255,6 +255,7 @@ export default function CandidateDetail() {
   const user = storedUser;
   const [data, setData] = useState(null);
   const [proctorEvents, setProctorEvents] = useState([]);
+  const [snapshots, setSnapshots] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [evaluating, setEvaluating] = useState(false);
   const [recommending, setRecommending] = useState(false);
@@ -269,6 +270,7 @@ export default function CandidateDetail() {
         setData(r.data);
         api.get(`/admin/candidates/${id}/proctor-events`).then(pe => setProctorEvents(pe.data||[])).catch(()=>{});
         api.get(`/admin/candidates/${id}/r2-status`).then(r2 => setR2Status(r2.data)).catch(()=>{});
+        api.get(`/admin/candidates/${id}/snapshots`).then(s => setSnapshots(s.data||[])).catch(()=>{});
       })
       .catch(e => setLoadError(e.response?.data?.detail || 'Failed to load candidate. Please try again.'));
   };
@@ -866,6 +868,52 @@ export default function CandidateDetail() {
                 );
               })()}
             </div>
+
+            {/* Snapshot photo strip */}
+            {snapshots.length > 0 && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-header">
+                  <span className="card-title">AI Snapshot Monitor</span>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <span className="badge badge-red">{snapshots.filter(s => s.is_flagged).length} flagged</span>
+                    <span className="badge badge-gray">{snapshots.length} total</span>
+                  </div>
+                </div>
+                <div style={{ padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {snapshots.map(s => (
+                      <div key={s.id} style={{ position: 'relative', flexShrink: 0 }}>
+                        <img
+                          src={`data:image/jpeg;base64,${s.thumbnail_b64}`}
+                          alt={`Snapshot ${s.id}`}
+                          style={{
+                            width: 100, height: 75, objectFit: 'cover', borderRadius: 6,
+                            border: `2px solid ${s.is_flagged ? 'var(--danger)' : 'var(--border)'}`,
+                            display: 'block',
+                          }}
+                          title={`${new Date(s.captured_at).toLocaleTimeString('en-IN')}${s.flag_reason ? ` — ${s.flag_reason.replace(/_/g,' ')}` : ''}`}
+                        />
+                        {s.is_flagged && (
+                          <div style={{
+                            position: 'absolute', top: 3, right: 3,
+                            background: 'var(--danger)', borderRadius: 4,
+                            padding: '1px 5px', fontSize: 9, color: '#fff', fontWeight: 700,
+                          }}>
+                            {s.flag_reason === 'phone_detected' ? '📱' : s.flag_reason === 'person_absent' ? '👤' : '👁️'}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 9, color: 'var(--text-3)', textAlign: 'center', marginTop: 3 }}>
+                          {new Date(s.captured_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 10 }}>
+                    📱 = phone detected &nbsp;·&nbsp; 👤 = person absent &nbsp;·&nbsp; 👁️ = looking away
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Event log */}
             <div className="card">

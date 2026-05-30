@@ -56,7 +56,7 @@ export default function WebcamCapture({ onCapture, onSkip }) {
     <div style={{ textAlign:'center', padding:16 }}>
       <VideoOff size={28} color="var(--text-3)" style={{ marginBottom:8 }} />
       <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</p>
-      <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip photo</button>
+      {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip photo</button>}
     </div>
   );
 
@@ -109,7 +109,7 @@ export default function WebcamCapture({ onCapture, onSkip }) {
           <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
             <Camera size={14}/> Take Photo
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>
+          {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>}
         </div>
       </div>
     </div>

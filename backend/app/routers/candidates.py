@@ -639,3 +639,136 @@ async def bulk_import_candidates(
         "candidates": created,
         "message": f"{len(created)} candidate(s) imported. {len(errors)} skipped.",
     }
+
+# ─── PROCTOR SNAPSHOT (AI phone/absence detection) ───
+@router.post("/proctor-snapshot/{session_token}")
+async def submit_proctor_snapshot(
+    session_token: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Receive a periodic webcam snapshot during assessment.
+    1. Run Claude Vision to detect phone / absence / looking away
+    2. Store compressed thumbnail + analysis in DB
+    3. Auto-terminate if phone detected 2+ times
+    """
+    session = _get_session_or_404(db, session_token)
+    if session.status not in ("IN_PROGRESS", "REGISTERED"):
+        return {"action": "continue"}
+
+    import base64, io, anthropic as anthropic_sdk
+
+    raw_b64 = payload.get("image_data", "")
+    if raw_b64.startswith("data:image"):
+        raw_b64 = raw_b64.split(",")[1]
+    if not raw_b64:
+        return {"action": "continue"}
+
+    # ── Compress to thumbnail for storage (~5KB) ──
+    try:
+        from PIL import Image as PILImage
+        img_bytes = base64.b64decode(raw_b64)
+        img = PILImage.open(io.BytesIO(img_bytes))
+        img.thumbnail((160, 120), PILImage.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=40)
+        thumbnail_b64 = base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        thumbnail_b64 = raw_b64[:2000]  # fallback — just store truncated
+
+    # ── Claude Vision analysis ──
+    analysis = {"phone_visible": False, "person_present": True,
+                "looking_at_screen": True, "notes": ""}
+    try:
+        client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
+        message = client.messages.create(
+            model=settings.llm_model,
+            max_tokens=150,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": raw_b64,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "This is a webcam frame from a proctored online assessment. "
+                            "Return ONLY valid JSON:\n"
+                            "{\n"
+                            '  "phone_visible": <true if any mobile phone or handheld device is visible>,\n'
+                            '  "person_present": <true if a person\'s face is clearly visible>,\n'
+                            '  "looking_at_screen": <true if the person appears to be looking at the computer screen>,\n'
+                            '  "notes": "<one short observation, max 8 words>"\n'
+                            "}"
+                        ),
+                    },
+                ],
+            }],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"): raw = raw[4:]
+        analysis = json.loads(raw.strip())
+    except Exception as e:
+        analysis["vision_error"] = str(e)[:100]
+
+    # ── Determine flag ──
+    is_flagged = False
+    flag_reason = None
+    if analysis.get("phone_visible"):
+        is_flagged = True
+        flag_reason = "phone_detected"
+    elif not analysis.get("person_present"):
+        is_flagged = True
+        flag_reason = "person_absent"
+    elif not analysis.get("looking_at_screen"):
+        is_flagged = True
+        flag_reason = "looking_away"
+
+    # ── Save snapshot ──
+    snap = models.ProctorSnapshot(
+        session_id=session.id,
+        thumbnail_b64=thumbnail_b64,
+        is_flagged=is_flagged,
+        flag_reason=flag_reason,
+        analysis=analysis,
+    )
+    db.add(snap)
+
+    # ── Auto-terminate on 2+ phone detections ──
+    action = "continue"
+    if flag_reason == "phone_detected":
+        db.add(models.ProctorEvent(
+            session_id=session.id,
+            event_type="phone_detected",
+            details=analysis.get("notes", ""),
+        ))
+        phone_count = db.query(models.ProctorSnapshot).filter(
+            models.ProctorSnapshot.session_id == session.id,
+            models.ProctorSnapshot.flag_reason == "phone_detected",
+        ).count() + 1  # +1 for current snap not yet committed
+
+        if phone_count >= 2:
+            session.proctoring_status = "terminated"
+            session.status = "SUBMITTED"
+            session.submitted_at = datetime.utcnow()
+            session.termination_reason = f"Auto-terminated: Mobile device detected {phone_count} times"
+            action = "terminate"
+        else:
+            action = "warn_phone"
+
+    db.commit()
+    return {
+        "action": action,
+        "is_flagged": is_flagged,
+        "flag_reason": flag_reason,
+        "notes": analysis.get("notes", ""),
+    }

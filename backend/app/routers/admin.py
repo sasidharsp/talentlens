@@ -1105,3 +1105,23 @@ def get_r2_status(
         "r2_verdict": rec.get("recommendation"),
         "r2_invited_at": r2.invited_at,
     }
+
+# ─────────────── PROCTOR SNAPSHOTS ───────────────
+@router.get("/candidates/{session_id}/snapshots")
+def get_snapshots(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    snaps = db.query(models.ProctorSnapshot)\
+        .filter_by(session_id=session_id)\
+        .order_by(models.ProctorSnapshot.captured_at)\
+        .all()
+    return [{
+        "id": s.id,
+        "captured_at": s.captured_at,
+        "thumbnail_b64": s.thumbnail_b64,
+        "is_flagged": s.is_flagged,
+        "flag_reason": s.flag_reason,
+        "analysis": s.analysis,
+    } for s in snaps]

@@ -281,6 +281,19 @@ class ProctorEvent(Base):
     session = relationship("AssessmentSession")
 
 
+class ProctorSnapshot(Base):
+    """Periodic webcam snapshots taken during assessment for AI cheat detection."""
+    __tablename__ = "proctor_snapshots"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("assessment_sessions.id"), nullable=False)
+    captured_at = Column(DateTime(timezone=True), server_default=func.now())
+    thumbnail_b64 = Column(Text, nullable=True)       # compressed JPEG base64 ~5KB
+    is_flagged = Column(Boolean, default=False)
+    flag_reason = Column(String(100), nullable=True)  # phone_detected|person_absent|looking_away
+    analysis = Column(JSON, nullable=True)            # full Claude Vision JSON response
+    session = relationship("AssessmentSession")
+
+
 # ─────────────────────────── INSTRUCTION VERSIONS ───────────────────────────
 class InstructionVersion(Base):
     __tablename__ = "instruction_versions"

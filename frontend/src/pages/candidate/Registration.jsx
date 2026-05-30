@@ -25,6 +25,7 @@ export default function Registration() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.years_of_experience) { setError('Years of experience is required.'); return; }
+    if (!webcamPhoto) { setError('Identity photo is required. Please open the camera and take a photo before continuing.'); return; }
     setLoading(true); setError('');
     try {
       const fd = new FormData();
@@ -108,28 +109,25 @@ export default function Registration() {
                 </div>
               </div>
 
-              {/* Identity Photo — optional */}
+              {/* Identity Photo — REQUIRED */}
               <div style={{ marginBottom: 24 }}>
                 <label className="label">
-                  Identity Photo
-                  <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>(optional)</span>
+                  Identity Photo <span style={{color:'var(--danger)'}}>*</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>required for proctored assessment</span>
                 </label>
-
                 {!showWebcam ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface-2)', borderRadius: 10, border: `1px dashed ${webcamPhoto ? 'var(--success-border)' : 'var(--border-2)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', background: 'var(--surface-2)', borderRadius: 10, border: `1px dashed ${webcamPhoto ? 'var(--success-border)' : 'var(--danger-border)'}` }}>
                     {webcamPhoto ? (
                       <>
                         <CheckCircle size={18} color="var(--success)" />
-                        <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500, flex: 1 }}>Photo captured successfully</span>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowWebcam(true); setWebcamPhoto(null); }}>
-                          Retake
-                        </button>
+                        <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500, flex: 1 }}>Photo captured ✓</span>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowWebcam(true); setWebcamPhoto(null); }}>Retake</button>
                       </>
                     ) : (
                       <>
-                        <Camera size={18} color="var(--text-3)" />
-                        <span style={{ fontSize: 13, color: 'var(--text-2)', flex: 1 }}>Take a photo for identity verification during assessment</span>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowWebcam(true)}>
+                        <Camera size={18} color="var(--danger)" />
+                        <span style={{ fontSize: 13, color: 'var(--text-2)', flex: 1 }}>A photo is required to verify your identity during the proctored assessment</span>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowWebcam(true)}>
                           <Camera size={14} /> Open Camera
                         </button>
                       </>
@@ -138,13 +136,8 @@ export default function Registration() {
                 ) : (
                   <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: 16 }}>
                     <WebcamCapture
-                      onCapture={(blob, dataUrl) => {
-                        if (blob) {
-                          setWebcamPhoto(blob);
-                          setShowWebcam(false);
-                        }
-                      }}
-                      onSkip={() => setShowWebcam(false)}
+                      onCapture={(blob, dataUrl) => { if (blob) { setWebcamPhoto(blob); setShowWebcam(false); } }}
+                      onSkip={null}
                     />
                   </div>
                 )}

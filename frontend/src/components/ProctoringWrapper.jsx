@@ -124,7 +124,50 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
     };
   }, [logEvent, doTerminate]);
 
-  // ── Gaze / mouse leave detection (proxy) ──
+  // ── Periodic snapshots for AI phone/absence detection ──
+  useEffect(() => {
+    if (webcamError) return;
+
+    const captureAndSend = async () => {
+      if (terminatedRef.current || !videoRef.current) return;
+      const video = videoRef.current;
+      if (!video.videoWidth) return; // not ready yet
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const b64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+
+        const res = await api.post(`/candidate/proctor-snapshot/${token}`, { image_data: b64 });
+        const { action, flag_reason, notes } = res.data;
+
+        if (action === 'terminate') {
+          doTerminate('Auto-terminated: Mobile device detected during assessment');
+        } else if (action === 'warn_phone') {
+          showWarning('📱 Mobile device detected! This is your first warning. A second detection will terminate your session.', 6000);
+          logEvent('phone_detected', notes || 'Phone visible in webcam');
+        } else if (flag_reason === 'person_absent') {
+          showWarning('⚠️ Please remain in front of your camera during the assessment.', 4000);
+        }
+      } catch (e) { /* silent — never let snapshot errors affect assessment */ }
+    };
+
+    // Random interval between 15–25 seconds
+    let timeoutId;
+    const schedule = () => {
+      const delay = 15000 + Math.random() * 10000;
+      timeoutId = setTimeout(async () => {
+        await captureAndSend();
+        if (!terminatedRef.current) schedule();
+      }, delay);
+    };
+
+    // First snapshot after 20 seconds
+    timeoutId = setTimeout(() => { captureAndSend(); schedule(); }, 20000);
+    return () => clearTimeout(timeoutId);
+  }, [token, webcamError]);
   useEffect(() => {
     const handleMouseLeave = (e) => {
       if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
