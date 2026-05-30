@@ -705,14 +705,18 @@ async def submit_proctor_snapshot(
                             "type": "text",
                             "text": (
                                 "This is a webcam frame from a proctored online assessment. "
+                                "The candidate should be looking DIRECTLY at the screen/camera at all times. "
                                 "Analyse carefully and return ONLY valid JSON:\n"
                                 "{\n"
-                                '  "phone_visible": <true if ANY mobile phone or handheld device is visible anywhere in frame>,\n'
-                                '  "person_present": <true if a person\'s face is clearly visible and centred>,\n'
-                                '  "looking_at_screen": <true ONLY if the candidate\'s eyes are directed straight toward the camera/screen. '
-                                'Set FALSE if they are looking sideways (second monitor), looking down (notes/desk/phone), '
-                                'looking up, or head is turned more than 20 degrees from camera. Be strict.>,\n'
-                                '  "notes": "<one observation, max 8 words>"\n'
+                                '  "phone_visible": <true if ANY mobile phone, tablet or handheld device is visible>,\n'
+                                '  "person_present": <true if a person\'s face is clearly visible>,\n'
+                                '  "looking_at_screen": <true ONLY if eyes are aimed straight at the camera. '
+                                'Set FALSE for ANY of: head turned sideways even slightly, eyes looking left/right, '
+                                'looking down at desk/keyboard, looking up, reading from paper/notes, '
+                                'talking to someone off-screen, or head tilted more than 10 degrees>,\n'
+                                '  "distraction_visible": <true if hands are raised to face/ear, '
+                                'another person is visible, or candidate appears to be talking>,\n'
+                                '  "notes": "<one specific observation, max 8 words>"\n'
                                 "}"
                             ),
                         },
@@ -739,6 +743,9 @@ async def submit_proctor_snapshot(
     elif not analysis.get("looking_at_screen"):
         is_flagged = True
         flag_reason = "looking_away"
+    elif analysis.get("distraction_visible"):
+        is_flagged = True
+        flag_reason = "distraction"
 
     # ── Save snapshot ──
     snap = models.ProctorSnapshot(

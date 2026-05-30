@@ -876,40 +876,57 @@ export default function CandidateDetail() {
                   <span className="card-title">AI Snapshot Monitor</span>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <span className="badge badge-red">{snapshots.filter(s => s.is_flagged).length} flagged</span>
+                    <span className="badge badge-indigo">{snapshots.filter(s => s.analysis && !s.analysis.vision_error).length} AI analysed</span>
                     <span className="badge badge-gray">{snapshots.length} total</span>
                   </div>
                 </div>
                 <div style={{ padding: '16px 20px' }}>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {snapshots.map(s => (
-                      <div key={s.id} style={{ position: 'relative', flexShrink: 0 }}>
-                        <img
-                          src={`data:image/jpeg;base64,${s.thumbnail_b64}`}
-                          alt={`Snapshot ${s.id}`}
-                          style={{
-                            width: 100, height: 75, objectFit: 'cover', borderRadius: 6,
-                            border: `2px solid ${s.is_flagged ? 'var(--danger)' : 'var(--border)'}`,
-                            display: 'block',
-                          }}
-                          title={`${new Date(s.captured_at).toLocaleTimeString('en-IN')}${s.flag_reason ? ` — ${s.flag_reason.replace(/_/g,' ')}` : ''}`}
-                        />
-                        {s.is_flagged && (
-                          <div style={{
-                            position: 'absolute', top: 3, right: 3,
-                            background: 'var(--danger)', borderRadius: 4,
-                            padding: '1px 5px', fontSize: 9, color: '#fff', fontWeight: 700,
-                          }}>
-                            {s.flag_reason === 'phone_detected' ? '📱' : s.flag_reason === 'person_absent' ? '👤' : '👁️'}
+                    {snapshots.map(s => {
+                      const a = s.analysis || {};
+                      const hasAI = a && !a.vision_error && (a.phone_visible !== undefined);
+                      const tooltip = hasAI
+                        ? [
+                            `Time: ${new Date(s.captured_at).toLocaleTimeString('en-IN')}`,
+                            `Phone: ${a.phone_visible ? '⚠️ YES' : '✓ No'}`,
+                            `Present: ${a.person_present ? '✓ Yes' : '⚠️ NO'}`,
+                            `Looking at screen: ${a.looking_at_screen ? '✓ Yes' : '⚠️ NO'}`,
+                            a.notes ? `Note: ${a.notes}` : '',
+                          ].filter(Boolean).join('\n')
+                        : `Time: ${new Date(s.captured_at).toLocaleTimeString('en-IN')}\nNo AI analysis on this frame`;
+                      return (
+                        <div key={s.id} style={{ position: 'relative', flexShrink: 0 }} title={tooltip}>
+                          <img
+                            src={`data:image/jpeg;base64,${s.thumbnail_b64}`}
+                            alt={`Snapshot ${s.id}`}
+                            style={{
+                              width: 100, height: 75, objectFit: 'cover', borderRadius: 6,
+                              border: `2px solid ${s.is_flagged ? 'var(--danger)' : hasAI ? 'var(--primary)' : 'var(--border)'}`,
+                              display: 'block', cursor: 'help',
+                            }}
+                          />
+                          {/* Flag badge */}
+                          {s.is_flagged && (
+                            <div style={{ position: 'absolute', top: 3, right: 3, background: 'var(--danger)', borderRadius: 4, padding: '1px 5px', fontSize: 9, color: '#fff', fontWeight: 700 }}>
+                              {s.flag_reason === 'phone_detected' ? '📱' : s.flag_reason === 'person_absent' ? '👤' : '👁️'}
+                            </div>
+                          )}
+                          {/* AI analysed indicator */}
+                          {hasAI && !s.is_flagged && (
+                            <div style={{ position: 'absolute', top: 3, left: 3, background: 'rgba(79,70,229,0.85)', borderRadius: 3, padding: '1px 4px', fontSize: 8, color: '#fff', fontWeight: 700 }}>
+                              AI
+                            </div>
+                          )}
+                          <div style={{ fontSize: 9, color: 'var(--text-3)', textAlign: 'center', marginTop: 3 }}>
+                            {new Date(s.captured_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </div>
-                        )}
-                        <div style={{ fontSize: 9, color: 'var(--text-3)', textAlign: 'center', marginTop: 3 }}>
-                          {new Date(s.captured_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 10 }}>
-                    📱 = phone detected &nbsp;·&nbsp; 👤 = person absent &nbsp;·&nbsp; 👁️ = looking away
+                    📱 = phone &nbsp;·&nbsp; 👤 = absent &nbsp;·&nbsp; 👁️ = looking away &nbsp;·&nbsp;
+                    <span style={{ color:'var(--primary)', fontWeight:600 }}>AI</span> = analysed, no violation &nbsp;·&nbsp; hover any photo for details
                   </div>
                 </div>
               </div>
