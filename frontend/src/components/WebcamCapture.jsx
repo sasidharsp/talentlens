@@ -13,7 +13,7 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   useEffect(() => {
     let active = true;
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false })
+      .getUserMedia({ video: true, audio: false })
       .then(s  => { if (active) setStream(s); })
       .catch(() => { if (active) setError('Camera access denied or unavailable.'); });
     return () => { active = false; };
