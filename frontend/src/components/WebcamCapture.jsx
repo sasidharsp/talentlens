@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, CheckCircle, RefreshCw, VideoOff } from 'lucide-react';
 
 export default function WebcamCapture({ onCapture, onSkip }) {
@@ -13,7 +13,7 @@ export default function WebcamCapture({ onCapture, onSkip }) {
     let cancelled = false;
 
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 }, audio: false })
+      .getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then(stream => {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
@@ -21,38 +21,43 @@ export default function WebcamCapture({ onCapture, onSkip }) {
         const video = videoRef.current;
         if (!video) return;
 
-        // ── Chrome fix: set these on the DOM element directly ──
-        // React's muted prop is unreliable in Chrome — causes black screen
-        video.muted      = true;
-        video.autoplay   = true;
-        video.playsInline = true;
-        video.setAttribute('muted', '');       // belt + suspenders
-        video.setAttribute('playsinline', '');
+        // Chrome fix: MUST set muted on DOM element — React prop is ignored by Chrome
+        video.muted = true;
+        video.setAttribute('muted', '');
 
+        // Set source — DO NOT call load(), it resets state in some Chrome versions
         video.srcObject = stream;
-        video.load();   // force Chrome to process srcObject immediately
 
-        const tryPlay = () => {
-          video.play()
-            .then(() => { if (!cancelled) setReady(true); })
-            .catch(() => { if (!cancelled) setReady(true); }); // show even if play() rejected
-        };
-
-        // Chrome fires loadedmetadata after load() + srcObject
-        video.addEventListener('loadedmetadata', tryPlay, { once: true });
-        video.addEventListener('canplay',        () => { if (!cancelled) setReady(true); }, { once: true });
-
-        // Fallback: if neither event fires in 3s, show anyway
-        setTimeout(() => { if (!cancelled && !ready) setReady(true); }, 3000);
+        // play() is triggered by onLoadedMetadata (React synthetic event on the element)
+        // which fires more reliably than manual addEventListener in Chrome
       })
       .catch(() => {
-        if (!cancelled) setError('Camera access denied or unavailable.');
+        if (!cancelled) setError('Camera access denied. Please allow camera access and refresh.');
       });
+
+    // 4-second fallback — if metadata never fires, show video anyway
+    const fallback = setTimeout(() => {
+      if (!cancelled && !ready) {
+        videoRef.current?.play().catch(() => {});
+        setReady(true);
+      }
+    }, 4000);
 
     return () => {
       cancelled = true;
+      clearTimeout(fallback);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
+  }, []);
+
+  // React synthetic event — fires reliably in Chrome when video has metadata
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = true; // set again just in case Chrome reset it
+    video.play()
+      .then(() => setReady(true))
+      .catch(() => setReady(true)); // show even if play() rejects
   }, []);
 
   const capture = () => {
@@ -106,12 +111,11 @@ export default function WebcamCapture({ onCapture, onSkip }) {
         </div>
       )}
 
-      {/* Video always in DOM — hidden when captured so stream stays alive */}
       <div style={{ display: captured ? 'none' : 'block' }}>
         <div style={{ position:'relative', display:'inline-block', marginBottom:12 }}>
-          {/* NOTE: muted/autoPlay/playsInline set programmatically above for Chrome compat */}
           <video
             ref={videoRef}
+            onLoadedMetadata={handleLoadedMetadata}
             style={{
               width:280, height:210, objectFit:'cover', borderRadius:10,
               border:'2px solid var(--border)', display:'block',
