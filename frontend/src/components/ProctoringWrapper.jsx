@@ -55,15 +55,28 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
   useEffect(() => {
     const initWebcam = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        // Probe for permission first so device labels are available
+        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        probe.getTracks().forEach(t => t.stop());
+
+        // Enumerate and prefer external camera
+        const all = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = all.filter(d => d.kind === 'videoinput');
+        const BUILTIN = ['facetime', 'integrated', 'built-in', 'internal', 'built in'];
+        const preferred = videoDevices.find(d =>
+          !BUILTIN.some(kw => d.label.toLowerCase().includes(kw))
+        ) || videoDevices[0];
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: preferred ? { deviceId: { exact: preferred.deviceId } } : true,
+          audio: false,
+        });
         setWebcamStream(stream);
-        if (videoRef.current) videoRef.current.srcObject = stream;
       } catch (e) {
         setWebcamError(true);
-        // No camera is not a violation — log informational only, don't count against candidate
         api.post(`/candidate/proctor-event/${token}`, {
           event_type: 'webcam_error',
-          details: 'Camera unavailable or permission denied — proctoring continues without video',
+          details: 'Camera unavailable or permission denied',
         }).catch(() => {});
       }
     };
@@ -75,6 +88,17 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
       if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
     };
   }, []);
+
+  // Attach stream to video element after React commits
+  // Separate effect guarantees videoRef.current is set and handles Chrome muted bug
+  useEffect(() => {
+    if (!webcamStream || !videoRef.current) return;
+    const video = videoRef.current;
+    video.muted = true;          // Chrome fix — React muted prop unreliable
+    video.setAttribute('muted', '');
+    video.srcObject = webcamStream;
+    video.play().catch(() => {});
+  }, [webcamStream]);
 
   // ── Fullscreen change listener ──
   useEffect(() => {
