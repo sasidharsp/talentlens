@@ -249,7 +249,10 @@ function FinalDecision({ sessionId, currentStatus, onUpdated, isAdmin }) {
 export default function CandidateDetail() {
   const { sessionId: id } = useParams();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = ['admin','super_admin'].includes(storedUser?.role);
+  const isSuperAdmin = storedUser?.role === 'super_admin';
+  const user = storedUser;
   const [data, setData] = useState(null);
   const [proctorEvents, setProctorEvents] = useState([]);
   const [loadError, setLoadError] = useState('');

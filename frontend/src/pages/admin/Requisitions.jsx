@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../../api/client';
 import { downloadFile } from '../../api/download';
-import { useAuth } from '../../contexts/AuthContext';
 import {
   Plus, ToggleLeft, ToggleRight, Briefcase,
   MapPin, Building2, Users, AlertCircle,
@@ -16,7 +15,9 @@ export default function Requisitions() {
   const [saving, setSaving]      = useState(false);
   const [err, setErr]            = useState('');
   const [importResult, setImportResult] = useState(null);
-  const { isSuperAdmin, isAdmin }  = useAuth();
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isSuperAdmin = storedUser?.role === 'super_admin';
+  const isAdmin = ['admin','super_admin'].includes(storedUser?.role);
   const fileRef = useRef();
 
   const load = () => api.get('/admin/requisitions').then(r => setReqs(r.data));
