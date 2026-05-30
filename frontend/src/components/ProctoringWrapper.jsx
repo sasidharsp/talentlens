@@ -158,10 +158,10 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
       } catch (e) { /* silent — never let snapshot errors affect assessment */ }
     };
 
-    // Random interval 8–12 seconds (avg 10)
+    // Capture every 4–6 seconds (avg 5 sec) — dense visual coverage
     let timeoutId;
     const schedule = () => {
-      const delay = 8000 + Math.random() * 4000;
+      const delay = 4000 + Math.random() * 2000;
       timeoutId = setTimeout(async () => {
         await captureAndSend();
         if (!terminatedRef.current) schedule();
@@ -169,7 +169,7 @@ export default function ProctoringWrapper({ token, onTerminate, children }) {
     };
 
     // First snapshot after 20 seconds
-    timeoutId = setTimeout(() => { captureAndSend(); schedule(); }, 10000);
+    timeoutId = setTimeout(() => { captureAndSend(); schedule(); }, 5000);
     return () => clearTimeout(timeoutId);
   }, [token, webcamError]);
   useEffect(() => {

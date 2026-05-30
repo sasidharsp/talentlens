@@ -677,50 +677,55 @@ async def submit_proctor_snapshot(
     except Exception:
         thumbnail_b64 = raw_b64[:2000]  # fallback — just store truncated
 
-    # ── Claude Vision analysis ──
+    # ── Claude Vision — run on every other snapshot to control cost ──
+    # Even-numbered snapshots get AI analysis (~every 10 sec), odd ones just store thumbnail
+    existing_count = db.query(models.ProctorSnapshot).filter_by(session_id=session.id).count()
+    run_ai = (existing_count % 2 == 0)
+
     analysis = {"phone_visible": False, "person_present": True,
                 "looking_at_screen": True, "notes": ""}
-    try:
-        client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
-        message = client.messages.create(
-            model=settings.llm_model,
-            max_tokens=150,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": raw_b64,
+    if run_ai:
+        try:
+            client = anthropic_sdk.Anthropic(api_key=settings.anthropic_api_key)
+            message = client.messages.create(
+                model=settings.llm_model,
+                max_tokens=150,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": raw_b64,
+                            },
                         },
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "This is a webcam frame from a proctored online assessment. "
-                            "Analyse carefully and return ONLY valid JSON:\n"
-                            "{\n"
-                            '  "phone_visible": <true if ANY mobile phone or handheld device is visible anywhere in frame>,\n'
-                            '  "person_present": <true if a person\'s face is clearly visible and centred>,\n'
-                            '  "looking_at_screen": <true ONLY if the candidate\'s eyes are directed straight toward the camera/screen. '
-                            'Set FALSE if they are looking sideways (second monitor), looking down (notes/desk/phone), '
-                            'looking up, or head is turned more than 20 degrees from camera. Be strict.>,\n'
-                            '  "notes": "<one observation, max 8 words>"\n'
-                            "}"
-                        ),
-                    },
-                ],
-            }],
-        )
-        raw = message.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"): raw = raw[4:]
-        analysis = json.loads(raw.strip())
-    except Exception as e:
-        analysis["vision_error"] = str(e)[:100]
+                        {
+                            "type": "text",
+                            "text": (
+                                "This is a webcam frame from a proctored online assessment. "
+                                "Analyse carefully and return ONLY valid JSON:\n"
+                                "{\n"
+                                '  "phone_visible": <true if ANY mobile phone or handheld device is visible anywhere in frame>,\n'
+                                '  "person_present": <true if a person\'s face is clearly visible and centred>,\n'
+                                '  "looking_at_screen": <true ONLY if the candidate\'s eyes are directed straight toward the camera/screen. '
+                                'Set FALSE if they are looking sideways (second monitor), looking down (notes/desk/phone), '
+                                'looking up, or head is turned more than 20 degrees from camera. Be strict.>,\n'
+                                '  "notes": "<one observation, max 8 words>"\n'
+                                "}"
+                            ),
+                        },
+                    ],
+                }],
+            )
+            raw = message.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"): raw = raw[4:]
+            analysis = json.loads(raw.strip())
+        except Exception as e:
+            analysis["vision_error"] = str(e)[:100]
 
     # ── Determine flag ──
     is_flagged = False

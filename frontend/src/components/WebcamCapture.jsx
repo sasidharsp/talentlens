@@ -1,64 +1,43 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, CheckCircle, RefreshCw, VideoOff } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Camera, CheckCircle, RefreshCw } from 'lucide-react';
 
 export default function WebcamCapture({ onCapture, onSkip }) {
-  const videoRef   = useRef(null);
-  const canvasRef  = useRef(null);
-  const streamRef  = useRef(null);
-  const [ready,    setReady]    = useState(false);
+  const videoRef  = useRef(null);
+  const canvasRef = useRef(null);
+  const [stream,   setStream]   = useState(null);
   const [captured, setCaptured] = useState(null);
   const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(true);
 
+  // Step 1 — get the stream
   useEffect(() => {
     let cancelled = false;
-
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'user' }, audio: false })
-      .then(stream => {
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-
-        const video = videoRef.current;
-        if (!video) return;
-
-        // Chrome fix: MUST set muted on DOM element — React prop is ignored by Chrome
-        video.muted = true;
-        video.setAttribute('muted', '');
-
-        // Set source — DO NOT call load(), it resets state in some Chrome versions
-        video.srcObject = stream;
-
-        // play() is triggered by onLoadedMetadata (React synthetic event on the element)
-        // which fires more reliably than manual addEventListener in Chrome
+      .getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false })
+      .then(s => {
+        if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
+        setStream(s);
+        setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) setError('Camera access denied. Please allow camera access and refresh.');
+        if (!cancelled) {
+          setError('Camera access denied or unavailable.');
+          setLoading(false);
+        }
       });
+    return () => { cancelled = true; };
+  }, []);
 
-    // 4-second fallback — if metadata never fires, show video anyway
-    const fallback = setTimeout(() => {
-      if (!cancelled && !ready) {
-        videoRef.current?.play().catch(() => {});
-        setReady(true);
-      }
-    }, 4000);
-
+  // Step 2 — once video element is in the DOM and stream is ready, attach srcObject
+  // This runs after render so videoRef.current is guaranteed to exist
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
     return () => {
-      cancelled = true;
-      clearTimeout(fallback);
-      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (stream) stream.getTracks().forEach(t => t.stop());
     };
-  }, []);
-
-  // React synthetic event — fires reliably in Chrome when video has metadata
-  const handleLoadedMetadata = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = true; // set again just in case Chrome reset it
-    video.play()
-      .then(() => setReady(true))
-      .catch(() => setReady(true)); // show even if play() rejects
-  }, []);
+  }, [stream]);
 
   const capture = () => {
     const video  = videoRef.current;
@@ -78,19 +57,27 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   const retake = () => {
     setCaptured(null);
     onCapture(null, null);
-    const video = videoRef.current;
-    if (video && streamRef.current) {
-      video.muted = true;
-      video.srcObject = streamRef.current;
-      video.play().catch(() => {});
-    }
+    // Re-attach stream in case it detached
+    if (videoRef.current && stream) videoRef.current.srcObject = stream;
   };
 
   if (error) return (
-    <div style={{ textAlign:'center', padding:16 }}>
-      <VideoOff size={28} color="var(--text-3)" style={{ marginBottom:8 }} />
-      <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</p>
+    <div style={{ padding:20, textAlign:'center' }}>
+      <div style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</div>
       {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip photo</button>}
+    </div>
+  );
+
+  if (captured) return (
+    <div style={{ textAlign:'center' }}>
+      <img src={captured} alt="Captured"
+        style={{ width:200, height:150, objectFit:'cover', borderRadius:10,
+          border:'2px solid var(--success)', display:'block', margin:'0 auto 12px' }} />
+      <div style={{ display:'flex', gap:8, justifyContent:'center', alignItems:'center' }}>
+        <CheckCircle size={16} color="var(--success)" />
+        <span style={{ fontSize:13, color:'var(--success)', fontWeight:600 }}>Photo captured</span>
+        <button className="btn btn-ghost btn-sm" onClick={retake}><RefreshCw size={13}/> Retake</button>
+      </div>
     </div>
   );
 
@@ -98,47 +85,27 @@ export default function WebcamCapture({ onCapture, onSkip }) {
     <div style={{ textAlign:'center' }}>
       <canvas ref={canvasRef} style={{ display:'none' }} />
 
-      {captured && (
-        <div style={{ marginBottom:12 }}>
-          <img src={captured} alt="Captured"
-            style={{ width:200, height:150, objectFit:'cover', borderRadius:10,
-              border:'2px solid var(--success)', display:'block', margin:'0 auto 12px' }} />
-          <div style={{ display:'flex', gap:8, justifyContent:'center', alignItems:'center' }}>
-            <CheckCircle size={16} color="var(--success)" />
-            <span style={{ fontSize:13, color:'var(--success)', fontWeight:600 }}>Photo captured</span>
-            <button className="btn btn-ghost btn-sm" onClick={retake}><RefreshCw size={13}/> Retake</button>
-          </div>
+      {loading ? (
+        <div style={{ width:280, height:210, background:'#111', borderRadius:10,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          margin:'0 auto 12px', border:'2px solid var(--border)' }}>
+          <div className="spinner" style={{ borderTopColor:'#fff' }} />
         </div>
+      ) : (
+        <video
+          ref={videoRef}
+          autoPlay muted playsInline
+          style={{ width:280, height:210, objectFit:'cover', borderRadius:10,
+            border:'2px solid var(--border)', display:'block',
+            transform:'scaleX(-1)', margin:'0 auto 12px' }}
+        />
       )}
 
-      <div style={{ display: captured ? 'none' : 'block' }}>
-        <div style={{ position:'relative', display:'inline-block', marginBottom:12 }}>
-          <video
-            ref={videoRef}
-            onLoadedMetadata={handleLoadedMetadata}
-            style={{
-              width:280, height:210, objectFit:'cover', borderRadius:10,
-              border:'2px solid var(--border)', display:'block',
-              transform:'scaleX(-1)', background:'#1a1a1a',
-            }}
-          />
-          {!ready && (
-            <div style={{
-              position:'absolute', inset:0, display:'flex', flexDirection:'column',
-              alignItems:'center', justifyContent:'center',
-              background:'rgba(0,0,0,0.75)', borderRadius:10, gap:10,
-            }}>
-              <div className="spinner" style={{ borderTopColor:'#fff' }} />
-              <span style={{ fontSize:12, color:'#ccc' }}>Starting camera…</span>
-            </div>
-          )}
-        </div>
-        <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
-          <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
-            <Camera size={14}/> Take Photo
-          </button>
-          {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>}
-        </div>
+      <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+        <button className="btn btn-primary btn-sm" onClick={capture} disabled={loading}>
+          <Camera size={14}/> Take Photo
+        </button>
+        {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>}
       </div>
     </div>
   );
