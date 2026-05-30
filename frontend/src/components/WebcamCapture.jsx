@@ -1,29 +1,64 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, CheckCircle, RefreshCw } from 'lucide-react';
+import { Camera, CheckCircle, RefreshCw, VideoOff, SwitchCamera } from 'lucide-react';
+
+// Keywords that identify built-in cameras
+const BUILTIN_KEYWORDS = ['facetime', 'integrated', 'built-in', 'internal', 'built in'];
+
+const isBuiltIn = label =>
+  BUILTIN_KEYWORDS.some(kw => label.toLowerCase().includes(kw));
 
 export default function WebcamCapture({ onCapture, onSkip }) {
   const videoRef  = useRef(null);
   const canvasRef = useRef(null);
-  const [stream,   setStream]   = useState(null);
-  const [ready,    setReady]    = useState(false);
-  const [captured, setCaptured] = useState(null);
-  const [error,    setError]    = useState('');
+  const [stream,    setStream]    = useState(null);
+  const [ready,     setReady]     = useState(false);
+  const [captured,  setCaptured]  = useState(null);
+  const [error,     setError]     = useState('');
+  const [cameras,   setCameras]   = useState([]);   // all available cameras
+  const [activeId,  setActiveId]  = useState(null); // currently selected deviceId
 
-  // Step 1 — get the stream
+  // Step 1 — enumerate cameras, pick best, get stream
   useEffect(() => {
     let active = true;
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: false })
-      .then(s  => { if (active) setStream(s); })
-      .catch(() => { if (active) setError('Camera access denied or unavailable.'); });
+
+    const init = async () => {
+      try {
+        // Need permission first before labels are available
+        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        probe.getTracks().forEach(t => t.stop());
+
+        const all = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = all.filter(d => d.kind === 'videoinput');
+        if (!active) return;
+        setCameras(videoDevices);
+
+        // Prefer external camera; fall back to first available
+        const preferred =
+          videoDevices.find(d => !isBuiltIn(d.label)) || videoDevices[0];
+
+        if (!preferred) throw new Error('No camera found');
+        setActiveId(preferred.deviceId);
+
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: preferred.deviceId } },
+          audio: false,
+        });
+        if (active) setStream(s);
+      } catch {
+        if (active) setError('Camera access denied or unavailable.');
+      }
+    };
+
+    init();
     return () => { active = false; };
   }, []);
 
-  // Step 2 — when stream is set, video element is already in the DOM, attach
+  // Step 2 — attach stream to video element (always in DOM)
   useEffect(() => {
     if (!stream) return;
     const video = videoRef.current;
     if (video) {
+      setReady(false);
       video.srcObject = stream;
       video.play()
         .then(() => setReady(true))
@@ -31,6 +66,22 @@ export default function WebcamCapture({ onCapture, onSkip }) {
     }
     return () => { stream.getTracks().forEach(t => t.stop()); };
   }, [stream]);
+
+  // Switch to a different camera
+  const switchTo = async (deviceId) => {
+    if (deviceId === activeId) return;
+    try {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } },
+        audio: false,
+      });
+      setActiveId(deviceId);
+      setStream(s);
+    } catch {
+      setError('Could not switch camera.');
+    }
+  };
 
   const capture = () => {
     const video  = videoRef.current;
@@ -58,6 +109,7 @@ export default function WebcamCapture({ onCapture, onSkip }) {
 
   if (error) return (
     <div style={{ textAlign:'center', padding:16 }}>
+      <VideoOff size={28} color="var(--text-3)" style={{ marginBottom:8 }} />
       <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</p>
       {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip photo</button>}
     </div>
@@ -79,28 +131,38 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   return (
     <div style={{ textAlign:'center' }}>
       <canvas ref={canvasRef} style={{ display:'none' }} />
+
       <div style={{ position:'relative', display:'inline-block', marginBottom:12 }}>
-        {/* Video always in DOM so videoRef.current is guaranteed when stream arrives */}
-        <video
-          ref={videoRef}
-          autoPlay muted playsInline
-          style={{
-            width:280, height:210, objectFit:'cover', borderRadius:10,
+        {/* Video always in DOM — guarantees ref is set when stream arrives */}
+        <video ref={videoRef} autoPlay muted playsInline
+          style={{ width:280, height:210, objectFit:'cover', borderRadius:10,
             border:'2px solid var(--border)', display:'block',
-            transform:'scaleX(-1)', background:'#1a1a1a',
-          }}
-        />
+            transform:'scaleX(-1)', background:'#1a1a1a' }} />
         {!ready && (
-          <div style={{
-            position:'absolute', inset:0, display:'flex', flexDirection:'column',
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
             alignItems:'center', justifyContent:'center',
-            background:'rgba(0,0,0,0.75)', borderRadius:10, gap:10,
-          }}>
+            background:'rgba(0,0,0,0.75)', borderRadius:10, gap:10 }}>
             <div className="spinner" style={{ borderTopColor:'#fff' }} />
             <span style={{ fontSize:12, color:'#ccc' }}>Starting camera…</span>
           </div>
         )}
       </div>
+
+      {/* Camera selector — only shown when multiple cameras detected */}
+      {cameras.length > 1 && (
+        <div style={{ marginBottom:10, display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
+          {cameras.map(cam => (
+            <button key={cam.deviceId}
+              onClick={() => switchTo(cam.deviceId)}
+              className={`btn btn-sm ${cam.deviceId === activeId ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize:11, padding:'4px 10px', display:'flex', alignItems:'center', gap:5 }}>
+              <SwitchCamera size={12} />
+              {cam.label || `Camera ${cameras.indexOf(cam) + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
         <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
           <Camera size={14}/> Take Photo
