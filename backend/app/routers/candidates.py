@@ -477,7 +477,7 @@ async def upload_webcam_photo(
     candidate = session.candidate
 
     content = await photo.read()
-    if len(content) > 2 * 1024 * 1024:  # 2MB max
+    if len(content) > 2 * 1024 * 1024:
         raise HTTPException(400, "Photo too large.")
 
     filename = f"webcam_{candidate.reference_code}.jpg"

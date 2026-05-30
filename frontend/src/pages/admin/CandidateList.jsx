@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowRight, Loader, Trash2, Upload, Users } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, Loader, Trash2, Upload } from 'lucide-react';
 
 const statusBadge = (s) => {
   const m = { REGISTERED:'badge-gray', IN_PROGRESS:'badge-amber', SUBMITTED:'badge-sky', EVALUATED:'badge-indigo', selected:'badge-green', rejected:'badge-red', pending:'badge-amber', on_hold:'badge-amber' };
@@ -13,7 +12,7 @@ const scoreColor = (v) => !v ? 'var(--text-3)' : v>=70 ? 'var(--success)' : v>=5
 const STATUSES = ['', 'REGISTERED', 'IN_PROGRESS', 'SUBMITTED', 'EVALUATED'];
 
 export default function CandidateList() {
-  const { isSuperAdmin } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState({ items: [], total: 0, total_pages: 1 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -21,7 +20,6 @@ export default function CandidateList() {
   const [loading, setLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const fileRef = useRef();
-  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,11 +121,7 @@ export default function CandidateList() {
                         <td style={{ color: 'var(--text-2)', fontSize: 13 }}>{c.email}</td>
                         <td>
                           <div style={{ fontSize: 13, color: 'var(--text)' }}>{c.role_name}</div>
-                          {c.requisition && (
-                            <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--primary)', marginTop: 2 }}>
-                              {c.requisition.req_id}
-                            </div>
-                          )}
+                          {c.requisition && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--primary)', marginTop: 2 }}>{c.requisition.req_id}</div>}
                         </td>
                         <td style={{ color: 'var(--text-2)' }}>{c.years_of_experience ? `${c.years_of_experience}y` : '—'}</td>
                         <td>{statusBadge(c.status)}</td>
@@ -135,29 +129,24 @@ export default function CandidateList() {
                           {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                          {c.submitted_at
-                            ? new Date(c.submitted_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                            : c.registered_at
-                              ? new Date(c.registered_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                              : '—'}
+                          {c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-IN') : c.registered_at ? new Date(c.registered_at).toLocaleDateString('en-IN') : '—'}
                         </td>
                         <td>
                           {c.ai_verdict
-                            ? <span className={`badge ${c.ai_verdict === 'SHORTLIST' ? 'badge-green' : c.ai_verdict === 'HOLD' ? 'badge-amber' : 'badge-red'}`} style={{ fontSize: 11, fontWeight: 700 }}>{c.ai_verdict}</span>
+                            ? <span className={`badge ${c.ai_verdict === 'SHORTLIST' ? 'badge-green' : c.ai_verdict === 'HOLD' ? 'badge-amber' : 'badge-red'}`}>{c.ai_verdict}</span>
                             : <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>}
                         </td>
                         <td>{c.final_status ? statusBadge(c.final_status) : <span style={{ color: 'var(--text-3)', fontSize: 13 }}>—</span>}</td>
-                        <td onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <ArrowRight size={14} color="var(--text-3)" />
-                          {isSuperAdmin && (
-                            <button className="btn btn-danger btn-sm" onClick={e => deleteCandidate(e, c.session_id)} title="Delete">
-                              <Trash2 size={12} />
-                            </button>
-                          )}
+                        <td onClick={e => e.stopPropagation()}>
+                          <button className="btn btn-danger btn-sm"
+                            onClick={e => { e.stopPropagation(); deleteCandidate(e, c.session_id); }}
+                            title="Delete candidate">
+                            <Trash2 size={12} />
+                          </button>
                         </td>
                       </tr>
                     ))}
-                    {data.items.length === 0 && (
+                                        {data.items.length === 0 && (
                       <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--text-3)' }}>
                         No candidates found
                       </td></tr>

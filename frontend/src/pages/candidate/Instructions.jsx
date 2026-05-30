@@ -97,38 +97,7 @@ export default function Instructions() {
             </div>
           </div>
 
-          {/* Segment cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-            {(data.segments || []).map(s => {
-              const Icon = SEG_ICONS[s.number] || BookOpen;
-              const color = SEG_COLORS[s.number];
-              const bg = SEG_BG[s.number];
-              const mins = s.timer_minutes || Math.round((s.timer_seconds || 0) / 60);
-              return (
-                <div key={s.number} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 11, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon size={20} color={color} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', marginBottom: 2 }}>
-                      Segment {s.number} — {s.label || s.description}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-2)' }}>{s.description}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, textAlign: 'center', flexShrink: 0 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 18, color }}>{s.questions}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Questions</div>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 18, color }}>{fmtTime(mins)}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Time</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+
 
           {/* Custom instructions from admin */}
           {data.instructions && data.instructions !== 'Please complete all three segments carefully.' && (
@@ -150,7 +119,6 @@ export default function Instructions() {
                 <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Important — Please read before starting</div>
                 <ul style={{ fontSize: 13, color: '#92400E', lineHeight: 1.9, paddingLeft: 16 }}>
                   <li>The assessment is <strong>proctored</strong> — your webcam will be active and tab switches are monitored</li>
-                  <li>Each segment is individually timed. The clock starts when a segment loads</li>
                   <li>Unanswered questions when time expires are submitted as blank</li>
                   <li>Do not close or refresh the browser during the assessment</li>
                   <li>Copy-paste and keyboard shortcuts are disabled</li>
