@@ -16,28 +16,34 @@ export default function WebcamCapture({ onCapture, onSkip }) {
       .getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 }, audio: false })
       .then(stream => {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-
         streamRef.current = stream;
+
         const video = videoRef.current;
         if (!video) return;
 
-        video.srcObject = stream;
+        // ── Chrome fix: set these on the DOM element directly ──
+        // React's muted prop is unreliable in Chrome — causes black screen
+        video.muted      = true;
+        video.autoplay   = true;
+        video.playsInline = true;
+        video.setAttribute('muted', '');       // belt + suspenders
+        video.setAttribute('playsinline', '');
 
-        // Chrome needs loadedmetadata before play() works
-        const startPlay = () => {
+        video.srcObject = stream;
+        video.load();   // force Chrome to process srcObject immediately
+
+        const tryPlay = () => {
           video.play()
-            .then(() => setReady(true))
-            .catch(() => setReady(true)); // show video even if play() rejects
+            .then(() => { if (!cancelled) setReady(true); })
+            .catch(() => { if (!cancelled) setReady(true); }); // show even if play() rejected
         };
 
-        if (video.readyState >= 2) {
-          // Already has metadata — play immediately
-          startPlay();
-        } else {
-          video.addEventListener('loadedmetadata', startPlay, { once: true });
-          // Fallback: canplay event as backup
-          video.addEventListener('canplay', () => setReady(true), { once: true });
-        }
+        // Chrome fires loadedmetadata after load() + srcObject
+        video.addEventListener('loadedmetadata', tryPlay, { once: true });
+        video.addEventListener('canplay',        () => { if (!cancelled) setReady(true); }, { once: true });
+
+        // Fallback: if neither event fires in 3s, show anyway
+        setTimeout(() => { if (!cancelled && !ready) setReady(true); }, 3000);
       })
       .catch(() => {
         if (!cancelled) setError('Camera access denied or unavailable.');
@@ -67,9 +73,9 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   const retake = () => {
     setCaptured(null);
     onCapture(null, null);
-    // Re-attach in case Chrome paused the track
     const video = videoRef.current;
     if (video && streamRef.current) {
+      video.muted = true;
       video.srcObject = streamRef.current;
       video.play().catch(() => {});
     }
@@ -87,7 +93,6 @@ export default function WebcamCapture({ onCapture, onSkip }) {
     <div style={{ textAlign:'center' }}>
       <canvas ref={canvasRef} style={{ display:'none' }} />
 
-      {/* Captured state */}
       {captured && (
         <div style={{ marginBottom:12 }}>
           <img src={captured} alt="Captured"
@@ -96,42 +101,34 @@ export default function WebcamCapture({ onCapture, onSkip }) {
           <div style={{ display:'flex', gap:8, justifyContent:'center', alignItems:'center' }}>
             <CheckCircle size={16} color="var(--success)" />
             <span style={{ fontSize:13, color:'var(--success)', fontWeight:600 }}>Photo captured</span>
-            <button className="btn btn-ghost btn-sm" onClick={retake}>
-              <RefreshCw size={13}/> Retake
-            </button>
+            <button className="btn btn-ghost btn-sm" onClick={retake}><RefreshCw size={13}/> Retake</button>
           </div>
         </div>
       )}
 
-      {/* Video — always in DOM, hidden when captured so stream stays alive */}
+      {/* Video always in DOM — hidden when captured so stream stays alive */}
       <div style={{ display: captured ? 'none' : 'block' }}>
         <div style={{ position:'relative', display:'inline-block', marginBottom:12 }}>
+          {/* NOTE: muted/autoPlay/playsInline set programmatically above for Chrome compat */}
           <video
             ref={videoRef}
-            autoPlay
-            muted
-            playsInline
             style={{
-              width:280, height:210,
-              objectFit:'cover', borderRadius:10,
+              width:280, height:210, objectFit:'cover', borderRadius:10,
               border:'2px solid var(--border)', display:'block',
               transform:'scaleX(-1)', background:'#1a1a1a',
-              // No opacity hiding — Chrome needs the element visible to render
             }}
           />
-          {/* Loading overlay */}
           {!ready && (
             <div style={{
               position:'absolute', inset:0, display:'flex', flexDirection:'column',
               alignItems:'center', justifyContent:'center',
-              background:'rgba(0,0,0,0.7)', borderRadius:10, gap:10,
+              background:'rgba(0,0,0,0.75)', borderRadius:10, gap:10,
             }}>
               <div className="spinner" style={{ borderTopColor:'#fff' }} />
               <span style={{ fontSize:12, color:'#ccc' }}>Starting camera…</span>
             </div>
           )}
         </div>
-
         <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
           <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
             <Camera size={14}/> Take Photo
