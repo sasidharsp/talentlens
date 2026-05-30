@@ -5,38 +5,31 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   const videoRef  = useRef(null);
   const canvasRef = useRef(null);
   const [stream,   setStream]   = useState(null);
+  const [ready,    setReady]    = useState(false);
   const [captured, setCaptured] = useState(null);
   const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(true);
 
   // Step 1 — get the stream
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false })
-      .then(s => {
-        if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
-        setStream(s);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError('Camera access denied or unavailable.');
-          setLoading(false);
-        }
-      });
-    return () => { cancelled = true; };
+      .then(s  => { if (active) setStream(s); })
+      .catch(() => { if (active) setError('Camera access denied or unavailable.'); });
+    return () => { active = false; };
   }, []);
 
-  // Step 2 — once video element is in the DOM and stream is ready, attach srcObject
-  // This runs after render so videoRef.current is guaranteed to exist
+  // Step 2 — when stream is set, video element is already in the DOM, attach
   useEffect(() => {
-    if (stream && videoRef.current) {
-      videoRef.current.srcObject = stream;
+    if (!stream) return;
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = stream;
+      video.play()
+        .then(() => setReady(true))
+        .catch(() => setReady(true));
     }
-    return () => {
-      if (stream) stream.getTracks().forEach(t => t.stop());
-    };
+    return () => { stream.getTracks().forEach(t => t.stop()); };
   }, [stream]);
 
   const capture = () => {
@@ -57,13 +50,15 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   const retake = () => {
     setCaptured(null);
     onCapture(null, null);
-    // Re-attach stream in case it detached
-    if (videoRef.current && stream) videoRef.current.srcObject = stream;
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
   };
 
   if (error) return (
-    <div style={{ padding:20, textAlign:'center' }}>
-      <div style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</div>
+    <div style={{ textAlign:'center', padding:16 }}>
+      <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</p>
       {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip photo</button>}
     </div>
   );
@@ -84,25 +79,30 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   return (
     <div style={{ textAlign:'center' }}>
       <canvas ref={canvasRef} style={{ display:'none' }} />
-
-      {loading ? (
-        <div style={{ width:280, height:210, background:'#111', borderRadius:10,
-          display:'flex', alignItems:'center', justifyContent:'center',
-          margin:'0 auto 12px', border:'2px solid var(--border)' }}>
-          <div className="spinner" style={{ borderTopColor:'#fff' }} />
-        </div>
-      ) : (
+      <div style={{ position:'relative', display:'inline-block', marginBottom:12 }}>
+        {/* Video always in DOM so videoRef.current is guaranteed when stream arrives */}
         <video
           ref={videoRef}
           autoPlay muted playsInline
-          style={{ width:280, height:210, objectFit:'cover', borderRadius:10,
+          style={{
+            width:280, height:210, objectFit:'cover', borderRadius:10,
             border:'2px solid var(--border)', display:'block',
-            transform:'scaleX(-1)', margin:'0 auto 12px' }}
+            transform:'scaleX(-1)', background:'#1a1a1a',
+          }}
         />
-      )}
-
+        {!ready && (
+          <div style={{
+            position:'absolute', inset:0, display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center',
+            background:'rgba(0,0,0,0.75)', borderRadius:10, gap:10,
+          }}>
+            <div className="spinner" style={{ borderTopColor:'#fff' }} />
+            <span style={{ fontSize:12, color:'#ccc' }}>Starting camera…</span>
+          </div>
+        )}
+      </div>
       <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
-        <button className="btn btn-primary btn-sm" onClick={capture} disabled={loading}>
+        <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
           <Camera size={14}/> Take Photo
         </button>
         {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>}
