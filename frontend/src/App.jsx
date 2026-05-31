@@ -22,6 +22,7 @@ import QuestionBank from './pages/admin/QuestionBank'
 import Round2Questions from './pages/admin/Round2Questions'
 import Round2Candidates from './pages/admin/Round2Candidates'
 import LiveMonitor from './pages/admin/LiveMonitor'
+import AdminHome from './pages/admin/AdminHome'
 import InPersonQuestions from './pages/admin/InPersonQuestions'
 import QAdminHome from './pages/admin/QAdminHome'
 import ProctoringSettings from './pages/admin/ProctoringSettings'
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/admin/login" element={<Login />} />
           <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="home" element={<AdminHome />} />
             <Route path="live" element={<LiveMonitor />} />
             <Route path="candidates" element={<CandidateList />} />
             <Route path="candidates/:sessionId" element={<CandidateDetail />} />

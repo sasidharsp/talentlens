@@ -1273,3 +1273,26 @@ def reset_proctoring_config(
     cfg = _get_or_create_proctor_config(db)
     db.delete(cfg); db.commit()
     return _cfg_to_dict(_get_or_create_proctor_config(db))
+
+
+# ─────────────── SELF-SERVICE PASSWORD CHANGE ───────────────
+@router.post("/users/me/change-password")
+def change_own_password(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    """Any logged-in admin can change their own password."""
+    current_pw = payload.get("current_password", "")
+    new_pw     = payload.get("new_password", "")
+
+    if not current_pw or not new_pw:
+        raise HTTPException(400, "Both current and new password are required.")
+    if len(new_pw) < 6:
+        raise HTTPException(400, "New password must be at least 6 characters.")
+    if not verify_password(current_pw, current_user.hashed_password):
+        raise HTTPException(400, "Current password is incorrect.")
+
+    current_user.hashed_password = get_password_hash(new_pw)
+    db.commit()
+    return {"message": "Password changed successfully."}

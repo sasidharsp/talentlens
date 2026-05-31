@@ -1,12 +1,88 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home, Shield,
+  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home, Shield, KeyRound,
 } from 'lucide-react';
+import api from '../api/client';
+
+// ── Change-password modal ────────────────────────────────────────────────────
+function ChangePasswordModal({ onClose }) {
+  const [form, setForm] = useState({ current_password:'', new_password:'', confirm:'' });
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState('');
+  const [ok,     setOk]     = useState(false);
+
+  const save = async () => {
+    setErr('');
+    if (form.new_password !== form.confirm) { setErr('New passwords do not match.'); return; }
+    if (form.new_password.length < 6)       { setErr('Password must be at least 6 characters.'); return; }
+    setSaving(true);
+    try {
+      await api.post('/admin/users/me/change-password', {
+        current_password: form.current_password,
+        new_password:     form.new_password,
+      });
+      setOk(true);
+      setTimeout(onClose, 1500);
+    } catch (e) {
+      setErr(e.response?.data?.detail || 'Failed to change password.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:99999,
+      background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center' }}
+      onClick={onClose}>
+      <div style={{ background:'var(--surface)', borderRadius:14, padding:28, width:380,
+        boxShadow:'0 8px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontWeight:700, fontSize:16, marginBottom:20,
+          display:'flex', alignItems:'center', gap:8 }}>
+          <KeyRound size={16} color="var(--primary)" /> Change Password
+        </div>
+        {ok ? (
+          <div style={{ textAlign:'center', padding:'16px 0', color:'var(--success)', fontWeight:600 }}>
+            ✓ Password changed successfully
+          </div>
+        ) : (
+          <>
+            <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:16 }}>
+              <div>
+                <label className="label">Current password</label>
+                <input type="password" className="input"
+                  value={form.current_password}
+                  onChange={e => setForm(f => ({...f, current_password:e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">New password</label>
+                <input type="password" className="input"
+                  value={form.new_password}
+                  onChange={e => setForm(f => ({...f, new_password:e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Confirm new password</label>
+                <input type="password" className="input"
+                  value={form.confirm}
+                  onChange={e => setForm(f => ({...f, confirm:e.target.value}))} />
+              </div>
+            </div>
+            {err && <div style={{ color:'var(--danger)', fontSize:13, marginBottom:12 }}>{err}</div>}
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : 'Change Password'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const allNavItems = [
+  { to: '/admin/home',      label: 'Home',               icon: Home,            exact: true, roles: ['admin','super_admin'] },
   { to: '/admin',           label: 'Dashboard',          icon: LayoutDashboard, exact: true, roles: ['admin','super_admin'] },
   { to: '/admin/live',      label: 'Live Monitor',        icon: Activity,        roles: ['admin','super_admin'] },
   { to: '/admin/analytics', label: 'Analytics',           icon: BarChart2,       roles: ['admin','super_admin'] },
@@ -23,15 +99,19 @@ const allNavItems = [
 export default function AdminLayout() {
   const { user, logout, isAdmin, isSuperAdmin, isQAdmin } = useAuth();
   const navigate = useNavigate();
+  const [showPwModal, setShowPwModal] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/admin/login'); };
 
-  // Redirect qadmin to their home page if landing on /admin root
+  // Redirect admin/super_admin to home page when landing on /admin root
   useEffect(() => {
+    if ((isAdmin || isSuperAdmin) && window.location.pathname === '/admin') {
+      navigate('/admin/home', { replace: true });
+    }
     if (isQAdmin && window.location.pathname === '/admin') {
       navigate('/admin/qadmin-home', { replace: true });
     }
-  }, [isQAdmin]);
+  }, [isAdmin, isSuperAdmin, isQAdmin]);
 
   const role = user?.role || '';
   const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : isQAdmin ? 'Question Admin' : 'Interviewer';
@@ -126,11 +206,21 @@ export default function AdminLayout() {
 
       {/* Main content */}
       <main className="admin-main">
+        {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
         <div style={{ position:'sticky', top:0, zIndex:10, background:'rgba(248,247,244,0.92)',
           backdropFilter:'blur(8px)', borderBottom:'1px solid var(--border)',
-          padding:'8px 28px', display:'flex', justifyContent:'flex-end', alignItems:'center' }}>
+          padding:'8px 28px', display:'flex', justifyContent:'flex-end',
+          alignItems:'center', gap:6 }}>
+          <button onClick={() => navigate('/admin/home')} className="btn btn-ghost btn-sm"
+            style={{ color:'var(--text-2)', gap:5 }}>
+            <Home size={14} /> Home
+          </button>
+          <button onClick={() => setShowPwModal(true)} className="btn btn-ghost btn-sm"
+            style={{ color:'var(--text-2)', gap:5 }}>
+            <KeyRound size={14} /> Change Password
+          </button>
           <button onClick={handleLogout} className="btn btn-ghost btn-sm"
-            style={{ color:'var(--text-2)', gap:6 }}>
+            style={{ color:'var(--text-2)', gap:5 }}>
             <LogOut size={14} /> Sign out
           </button>
         </div>
