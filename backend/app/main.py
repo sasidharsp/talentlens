@@ -81,6 +81,25 @@ def seed_defaults():
                 created_by INTEGER REFERENCES users(id),
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )""",
+            """CREATE TABLE IF NOT EXISTS proctoring_config (
+                id SERIAL PRIMARY KEY,
+                enabled BOOLEAN DEFAULT TRUE,
+                max_weight INTEGER DEFAULT 60,
+                grace_frames INTEGER DEFAULT 12,
+                cooldown_ms INTEGER DEFAULT 15000,
+                audio_rms FLOAT DEFAULT 72.0,
+                audio_hold_ms INTEGER DEFAULT 9000,
+                phone_confidence FLOAT DEFAULT 0.65,
+                phone_frames INTEGER DEFAULT 5,
+                phone_term_count INTEGER DEFAULT 3,
+                gaze_h FLOAT DEFAULT 0.20,
+                gaze_v_up FLOAT DEFAULT 0.14,
+                gaze_v_down FLOAT DEFAULT 0.24,
+                head_thresh FLOAT DEFAULT 0.16,
+                snap_ms INTEGER DEFAULT 10000,
+                violation_weights JSONB DEFAULT '{}'::jsonb,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )""",
         ]
         for sql in migrations:
             try:

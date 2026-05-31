@@ -15,6 +15,7 @@ const allNavItems = [
   { to: '/admin/questions', label: 'Question Bank',       icon: BookOpen,        roles: ['admin','super_admin'] },
   { to: '/admin/inperson',  label: 'In-person Interview', icon: MessageSquare,   roles: ['admin','super_admin','qadmin'] },
   { to: '/admin/settings',  label: 'Settings',            icon: Settings,        roles: ['admin','super_admin'] },
+  { to: '/admin/proctoring',label: 'Proctoring',           icon: Shield,          roles: ['admin','super_admin'] },
   // qadmin-only home
   { to: '/admin/qadmin-home', label: 'Home', icon: Home, exact: true, roles: ['qadmin'] },
 ];

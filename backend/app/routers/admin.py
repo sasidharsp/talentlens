@@ -1205,3 +1205,71 @@ def admin_terminate_session(
     ))
     db.commit()
     return {"terminated": True, "session_id": session_id}
+
+
+# ═══════════════════════════════════════════════════════
+#  PROCTORING CONFIG — global settings, admin-editable
+# ═══════════════════════════════════════════════════════
+
+def _get_or_create_proctor_config(db):
+    cfg = db.query(models.ProctoringConfig).first()
+    if not cfg:
+        cfg = models.ProctoringConfig()
+        db.add(cfg); db.commit(); db.refresh(cfg)
+    return cfg
+
+def _cfg_to_dict(cfg):
+    return {
+        "enabled":          cfg.enabled,
+        "max_weight":       cfg.max_weight,
+        "grace_frames":     cfg.grace_frames,
+        "cooldown_ms":      cfg.cooldown_ms,
+        "audio_rms":        cfg.audio_rms,
+        "audio_hold_ms":    cfg.audio_hold_ms,
+        "phone_confidence": cfg.phone_confidence,
+        "phone_frames":     cfg.phone_frames,
+        "phone_term_count": cfg.phone_term_count,
+        "gaze_h":           cfg.gaze_h,
+        "gaze_v_up":        cfg.gaze_v_up,
+        "gaze_v_down":      cfg.gaze_v_down,
+        "head_thresh":      cfg.head_thresh,
+        "snap_ms":          cfg.snap_ms,
+        "violation_weights":cfg.violation_weights or {},
+        "updated_at":       cfg.updated_at,
+    }
+
+@router.get("/proctoring-config")
+def get_proctoring_config(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_any_staff),
+):
+    return _cfg_to_dict(_get_or_create_proctor_config(db))
+
+@router.put("/proctoring-config")
+def update_proctoring_config(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    cfg = _get_or_create_proctor_config(db)
+    fields = [
+        "enabled","max_weight","grace_frames","cooldown_ms",
+        "audio_rms","audio_hold_ms","phone_confidence","phone_frames",
+        "phone_term_count","gaze_h","gaze_v_up","gaze_v_down",
+        "head_thresh","snap_ms","violation_weights",
+    ]
+    for f in fields:
+        if f in payload:
+            setattr(cfg, f, payload[f])
+    cfg.updated_at = datetime.utcnow()
+    db.commit(); db.refresh(cfg)
+    return _cfg_to_dict(cfg)
+
+@router.post("/proctoring-config/reset")
+def reset_proctoring_config(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    cfg = _get_or_create_proctor_config(db)
+    db.delete(cfg); db.commit()
+    return _cfg_to_dict(_get_or_create_proctor_config(db))
