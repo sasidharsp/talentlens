@@ -209,3 +209,42 @@ async def import_questions(
         "errors":   errors,
         "message":  f"{created} question(s) imported successfully.",
     }
+
+
+@router.delete("/questions/{question_id}")
+def delete_question(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_any_staff),
+):
+    """Delete a single question by ID."""
+    q = db.query(models.InPersonQuestion).filter_by(id=question_id).first()
+    if not q:
+        raise HTTPException(404, "Question not found.")
+    db.delete(q); db.commit()
+    return {"deleted": True, "id": question_id}
+
+
+@router.delete("/questions/by-tag/{tag}")
+def delete_by_tag(
+    tag: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_any_staff),
+):
+    """Delete all questions with a specific tag."""
+    count = db.query(models.InPersonQuestion).filter_by(tag=tag).count()
+    db.query(models.InPersonQuestion).filter_by(tag=tag).delete()
+    db.commit()
+    return {"deleted": count, "tag": tag}
+
+
+@router.delete("/questions")
+def purge_all(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_any_staff),
+):
+    """Purge ALL in-person interview questions."""
+    count = db.query(models.InPersonQuestion).count()
+    db.query(models.InPersonQuestion).delete()
+    db.commit()
+    return {"deleted": count}
