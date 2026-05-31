@@ -190,7 +190,7 @@ export default function QuestionBank() {
     fd.append('batch_tag', importBatchTag.trim());
     fd.append('segment', seg);
     try {
-      const r = await api.post(`/admin/questions/import-tagged`, fd, {
+      const r = await api.post(`/admin/questions/seg${seg}/import-tagged`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setImportResult(r.data);
