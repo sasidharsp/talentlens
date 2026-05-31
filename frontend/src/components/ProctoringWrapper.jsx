@@ -68,12 +68,12 @@ const T = {
   PHONE_CONF:0.70,   // COCO-SSD confidence to count as phone frame
   PHONE_FRAMES:3,    // consecutive frames before phone_detected fires
   PHONE_TERM:3,      // confirmed phone events before auto-terminate
-  AUDIO_RMS: 28,
-  AUDIO_HOLD:2000,
-  GRACE:     3,
+  AUDIO_RMS: 55,    // raised — ignore brief coughs/sneezes
+  AUDIO_HOLD:6000,  // 6 seconds sustained before flagging
+  GRACE:     6,     // ~0.6s at 10fps before violation counts
   COOLDOWN:  7000,
   SNAP_MS:   90000,  // evidence snapshot every 90 s
-  MAX_W:     20,     // weighted points before auto-terminate
+  MAX_W:     35,     // weighted points before auto-terminate
   DEVTOOLS:  160,
 };
 
@@ -83,7 +83,7 @@ const VIOLS = {
   multiple_faces:   { w:3, c:'#DC2626', lbl:'Multiple people in frame',        Icon:Users      },
   devtools_open:    { w:3, c:'#DC2626', lbl:'Browser DevTools opened',         Icon:Keyboard   },
   face_not_detected:{ w:2, c:'#EF4444', lbl:'Face not visible',                Icon:EyeOff     },
-  audio_detected:   { w:2, c:'#8B5CF6', lbl:'Speaking detected',               Icon:Mic        },
+  audio_detected:   { w:1, c:'#8B5CF6', lbl:'Speaking detected',               Icon:Mic        },
   tab_switch:       { w:2, c:'#EF4444', lbl:'Switched tabs / minimised',       Icon:MonitorOff },
   fullscreen_exit:  { w:2, c:'#8B5CF6', lbl:'Exited fullscreen',               Icon:Maximize2  },
   copy_attempt:     { w:2, c:'#EF4444', lbl:'Copy blocked',                    Icon:Copy       },
@@ -650,7 +650,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
       {/* Live violation log */}
       {log.length > 0 && (
-        <div style={{ position:'fixed',bottom:12,right:12,zIndex:9990,width:220,
+        <div style={{ position:'fixed',bottom:12,left:12,zIndex:9990,width:220,
           background:'rgba(0,0,0,0.85)',borderRadius:10,
           border:'1px solid rgba(255,255,255,0.1)',overflow:'hidden',
           backdropFilter:'blur(4px)' }}>
@@ -676,7 +676,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
       {/* Final warning */}
       {weighted >= T.MAX_W-4 && weighted < T.MAX_W && (
-        <div style={{ position:'fixed',bottom:log.length>0?216:12,right:12,zIndex:9990,
+        <div style={{ position:'fixed',bottom:log.length>0?216:12,left:12,zIndex:9990,
           background:'#7F1D1D',border:'1px solid #EF4444',borderRadius:10,
           padding:'10px 14px',color:'#FCA5A5',fontSize:12,fontWeight:600,maxWidth:220 }}>
           ⛔ {T.MAX_W-weighted} pts until auto-termination
