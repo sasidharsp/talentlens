@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home,
+  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home, Shield,
 } from 'lucide-react';
 
 const allNavItems = [
