@@ -307,6 +307,18 @@ class InstructionVersion(Base):
 
 
 # ─────────────────────────── ROUND 2 ───────────────────────────
+class InPersonQuestion(Base):
+    """Question bank for face-to-face in-person interviews. Managed by qadmins."""
+    __tablename__ = "inperson_questions"
+    id         = Column(Integer, primary_key=True, index=True)
+    question   = Column(Text, nullable=False)
+    answer     = Column(Text, nullable=False)
+    tag        = Column(String(100), nullable=False, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    creator    = relationship("User", foreign_keys=[created_by])
+
+
 class Round2Question(Base):
     __tablename__ = "round2_questions"
     id = Column(Integer, primary_key=True, index=True)

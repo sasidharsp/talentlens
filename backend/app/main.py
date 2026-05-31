@@ -11,6 +11,7 @@ from app.config import settings
 from app.routers import auth, candidates, admin, questions
 from app.routers import requisitions as req_router
 from app.routers import round2_admin, round2_candidate
+from app.routers import inperson as inperson_router
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
@@ -40,6 +41,7 @@ app.include_router(questions.router)
 app.include_router(req_router.router)
 app.include_router(round2_admin.router)
 app.include_router(round2_candidate.router)
+app.include_router(inperson_router.router)
 
 # Serve uploaded files
 os.makedirs(settings.upload_dir, exist_ok=True)
@@ -71,6 +73,14 @@ def seed_defaults():
             "ALTER TABLE questions_seg3 ADD COLUMN IF NOT EXISTS batch_tag VARCHAR(100)",
             # Add qadmin to the role enum if using PostgreSQL enum type
             "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel='qadmin' AND enumtypid=(SELECT oid FROM pg_type WHERE typname='userrole')) THEN ALTER TYPE userrole ADD VALUE 'qadmin'; END IF; END $$",
+            """CREATE TABLE IF NOT EXISTS inperson_questions (
+                id SERIAL PRIMARY KEY,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                tag VARCHAR(100) NOT NULL,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )""",
         ]
         for sql in migrations:
             try:

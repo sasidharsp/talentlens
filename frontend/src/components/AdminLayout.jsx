@@ -1,18 +1,22 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase, BarChart2, Award, Activity
+  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home,
 } from 'lucide-react';
 
 const allNavItems = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true, roles: ['admin','super_admin'] },
-  { to: '/admin/live', label: 'Live Monitor', icon: Activity, roles: ['admin','super_admin'] },
-  { to: '/admin/analytics', label: 'Analytics', icon: BarChart2, roles: ['admin','super_admin'] },
-  { to: '/admin/candidates', label: 'Candidates', icon: Users, roles: ['admin','super_admin','interviewer'] },
-  { to: '/admin/requisitions', label: 'Requisitions', icon: Briefcase, roles: ['admin','super_admin'] },
-  { to: '/admin/questions', label: 'Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
-  { to: '/admin/settings', label: 'Settings', icon: Settings, roles: ['admin','super_admin'] },
+  { to: '/admin',           label: 'Dashboard',          icon: LayoutDashboard, exact: true, roles: ['admin','super_admin'] },
+  { to: '/admin/live',      label: 'Live Monitor',        icon: Activity,        roles: ['admin','super_admin'] },
+  { to: '/admin/analytics', label: 'Analytics',           icon: BarChart2,       roles: ['admin','super_admin'] },
+  { to: '/admin/candidates',label: 'Candidates',          icon: Users,           roles: ['admin','super_admin','interviewer'] },
+  { to: '/admin/requisitions',label:'Requisitions',       icon: Briefcase,       roles: ['admin','super_admin'] },
+  { to: '/admin/questions', label: 'Question Bank',       icon: BookOpen,        roles: ['admin','super_admin'] },
+  { to: '/admin/inperson',  label: 'In-person Interview', icon: MessageSquare,   roles: ['admin','super_admin','qadmin'] },
+  { to: '/admin/settings',  label: 'Settings',            icon: Settings,        roles: ['admin','super_admin'] },
+  // qadmin-only home
+  { to: '/admin/qadmin-home', label: 'Home', icon: Home, exact: true, roles: ['qadmin'] },
 ];
 
 export default function AdminLayout() {
@@ -20,6 +24,13 @@ export default function AdminLayout() {
   const navigate = useNavigate();
 
   const handleLogout = () => { logout(); navigate('/admin/login'); };
+
+  // Redirect qadmin to their home page if landing on /admin root
+  useEffect(() => {
+    if (isQAdmin && window.location.pathname === '/admin') {
+      navigate('/admin/qadmin-home', { replace: true });
+    }
+  }, [isQAdmin]);
 
   const role = user?.role || '';
   const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : isQAdmin ? 'Question Admin' : 'Interviewer';

@@ -1,0 +1,219 @@
+import { useState, useEffect } from 'react';
+import { Tag, Plus, ChevronDown, ChevronUp, X, Check } from 'lucide-react';
+import api from '../../api/client';
+
+export default function InPersonQuestions() {
+  const [tags,      setTags]      = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [activeTag, setActiveTag] = useState(null);
+  const [expanded,  setExpanded]  = useState({});
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [form, setForm] = useState({ question:'', answer:'', tag:'', newTag:'' });
+  const [error, setError] = useState('');
+
+  const loadTags = () =>
+    api.get('/inperson/tags').then(r => setTags(r.data)).catch(() => {});
+
+  const loadQuestions = (tag = null) =>
+    api.get('/inperson/questions', { params: tag ? { tag } : {} })
+       .then(r => setQuestions(r.data)).catch(() => {});
+
+  useEffect(() => { loadTags(); loadQuestions(); }, []);
+
+  const handleTag = (tag) => {
+    const next = activeTag === tag ? null : tag;
+    setActiveTag(next);
+    loadQuestions(next);
+  };
+
+  const toggle = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
+
+  const handleAdd = async () => {
+    setError('');
+    const tag = form.newTag.trim() || form.tag;
+    if (!form.question.trim()) { setError('Question is required.'); return; }
+    if (!form.answer.trim())   { setError('Answer is required.');   return; }
+    if (!tag)                  { setError('Tag is required.');       return; }
+    setSaving(true);
+    try {
+      await api.post('/inperson/questions', {
+        question: form.question.trim(),
+        answer:   form.answer.trim(),
+        tag,
+      });
+      setSaved(true);
+      setForm({ question:'', answer:'', tag:'', newTag:'' });
+      setTimeout(() => setSaved(false), 2000);
+      await loadTags();
+      await loadQuestions(activeTag);
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Failed to save.');
+    } finally { setSaving(false); }
+  };
+
+  // Group questions by tag for display
+  const grouped = questions.reduce((acc, q) => {
+    (acc[q.tag] = acc[q.tag] || []).push(q);
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      <div className="admin-topbar">
+        <div>
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:22, fontWeight:400 }}>
+            In-person Interview Questions
+          </div>
+          <div style={{ fontSize:13, color:'var(--text-2)', marginTop:2 }}>
+            {questions.length} question{questions.length !== 1 ? 's' : ''}
+            {activeTag ? ` in "${activeTag}"` : ' across all tags'}
+          </div>
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(s => !s); setError(''); }}>
+          <Plus size={14} /> Add Question
+        </button>
+      </div>
+
+      <div className="admin-content page-fade">
+
+        {/* Tag chips */}
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:'var(--text-3)',
+            textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>
+            Browse by Tag
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+            <button onClick={() => handleTag(null)}
+              className={`btn btn-sm ${!activeTag ? 'btn-primary' : 'btn-ghost'}`}>
+              All ({questions.length || tags.reduce((s,t) => s + t.count, 0)})
+            </button>
+            {tags.map(t => (
+              <button key={t.tag} onClick={() => handleTag(t.tag)}
+                className={`btn btn-sm ${activeTag === t.tag ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <Tag size={11} /> {t.tag}
+                <span style={{ fontSize:11, opacity:0.7 }}>({t.count})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Add question form */}
+        {showAdd && (
+          <div className="card" style={{ padding:24, marginBottom:24,
+            border:'1px solid var(--primary)40', background:'var(--primary)05' }}>
+            <div style={{ fontWeight:700, fontSize:14, marginBottom:16,
+              display:'flex', alignItems:'center', gap:8 }}>
+              <Plus size={15} color="var(--primary)" /> Add New Question
+            </div>
+
+            {error && (
+              <div style={{ background:'var(--danger-light)', border:'1px solid var(--danger-border)',
+                borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--danger)', marginBottom:12 }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display:'grid', gap:14 }}>
+              <div>
+                <label className="form-label">Tag</label>
+                <div style={{ display:'flex', gap:8 }}>
+                  <select className="input" value={form.tag}
+                    onChange={e => setForm(f => ({ ...f, tag: e.target.value, newTag:'' }))}>
+                    <option value="">— Select existing tag —</option>
+                    {tags.map(t => <option key={t.tag} value={t.tag}>{t.tag}</option>)}
+                  </select>
+                  <span style={{ alignSelf:'center', color:'var(--text-3)', fontSize:13 }}>or</span>
+                  <input className="input" placeholder="Create new tag…"
+                    value={form.newTag}
+                    onChange={e => setForm(f => ({ ...f, newTag: e.target.value, tag:'' }))} />
+                </div>
+              </div>
+              <div>
+                <label className="form-label">Question</label>
+                <textarea className="input" rows={3} placeholder="Enter the interview question…"
+                  value={form.question}
+                  onChange={e => setForm(f => ({ ...f, question: e.target.value }))} />
+              </div>
+              <div>
+                <label className="form-label">Expected Answer</label>
+                <textarea className="input" rows={4} placeholder="Enter the expected answer / key points…"
+                  value={form.answer}
+                  onChange={e => setForm(f => ({ ...f, answer: e.target.value }))} />
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={saving}>
+                  {saved ? <><Check size={13} /> Saved</> : saving ? 'Saving…' : <><Plus size={13} /> Save Question</>}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Questions grouped by tag */}
+        {questions.length === 0 ? (
+          <div className="card" style={{ padding:48, textAlign:'center', color:'var(--text-3)' }}>
+            <Tag size={36} style={{ marginBottom:12, opacity:0.3 }} />
+            <div style={{ fontSize:15, fontWeight:500 }}>No questions yet</div>
+            <div style={{ fontSize:13, marginTop:6 }}>Add the first question using the button above.</div>
+          </div>
+        ) : (
+          Object.entries(grouped).map(([tag, qs]) => (
+            <div key={tag} className="card" style={{ marginBottom:16, overflow:'hidden' }}>
+              {/* Tag header */}
+              <div style={{ padding:'12px 20px', background:'var(--surface-2)',
+                borderBottom:'1px solid var(--border)',
+                display:'flex', alignItems:'center', gap:8 }}>
+                <Tag size={13} color="var(--primary)" />
+                <span style={{ fontWeight:700, fontSize:14 }}>{tag}</span>
+                <span style={{ fontSize:12, color:'var(--text-3)', marginLeft:4 }}>
+                  {qs.length} question{qs.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Questions */}
+              {qs.map((q, i) => (
+                <div key={q.id} style={{
+                  borderBottom: i < qs.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  {/* Question row */}
+                  <button onClick={() => toggle(q.id)}
+                    style={{ width:'100%', padding:'14px 20px', background:'none', border:'none',
+                      cursor:'pointer', textAlign:'left', display:'flex',
+                      alignItems:'flex-start', gap:12 }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'var(--primary)',
+                      minWidth:24, paddingTop:1 }}>Q{i+1}</span>
+                    <span style={{ flex:1, fontSize:14, color:'var(--text)', lineHeight:1.5 }}>
+                      {q.question}
+                    </span>
+                    {expanded[q.id]
+                      ? <ChevronUp size={16} color="var(--text-3)" style={{ flexShrink:0 }} />
+                      : <ChevronDown size={16} color="var(--text-3)" style={{ flexShrink:0 }} />}
+                  </button>
+
+                  {/* Answer — shown on expand */}
+                  {expanded[q.id] && (
+                    <div style={{ padding:'0 20px 16px 56px' }}>
+                      <div style={{ fontSize:11, fontWeight:600, color:'var(--text-3)',
+                        textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
+                        Expected Answer
+                      </div>
+                      <div style={{ fontSize:13, color:'var(--text-2)', lineHeight:1.7,
+                        padding:'12px 14px', background:'var(--surface-2)',
+                        borderRadius:8, border:'1px solid var(--border)',
+                        whiteSpace:'pre-wrap' }}>
+                        {q.answer}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
