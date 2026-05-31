@@ -60,39 +60,41 @@ const LM = {
 
 // ─── Thresholds ───────────────────────────────────────────────────────────────
 const T = {
-  H_GAZE:    0.13,
-  V_UP:      0.09,
-  V_DOWN:    0.17,
-  HEAD:      0.11,
-  EAR:       0.15,
-  PHONE_CONF:0.70,   // COCO-SSD confidence to count as phone frame
-  PHONE_FRAMES:3,    // consecutive frames before phone_detected fires
-  PHONE_TERM:3,      // confirmed phone events before auto-terminate
-  AUDIO_RMS: 55,    // raised — ignore brief coughs/sneezes
-  AUDIO_HOLD:6000,  // 6 seconds sustained before flagging
-  GRACE:     6,     // ~0.6s at 10fps before violation counts
-  COOLDOWN:  7000,
-  SNAP_MS:   90000,  // evidence snapshot every 90 s
-  MAX_W:     35,     // weighted points before auto-terminate
+  H_GAZE:    0.20,   // iris horizontal — raised, more tolerant
+  V_UP:      0.14,   // iris up threshold
+  V_DOWN:    0.24,   // iris down threshold
+  HEAD:      0.16,   // nose offset for head turn
+  EAR:       0.12,   // eye closure — lower = less sensitive
+  PHONE_CONF:0.65,   // COCO-SSD phone confidence
+  PHONE_FRAMES:5,    // frames to confirm phone (~0.5s)
+  PHONE_TERM:3,      // confirmed phone events before terminate
+  AUDIO_RMS: 72,     // only loud sustained speech (raised from 55)
+  AUDIO_HOLD:9000,   // 9 seconds sustained before flagging
+  GRACE:     12,     // ~1.2s at 10fps before violation counts
+  COOLDOWN:  15000,  // 15s before same event fires again
+  SNAP_MS:   90000,  // evidence snapshot every 90s
+  MAX_W:     60,     // raised — much harder to auto-terminate
   DEVTOOLS:  160,
 };
 
 // ─── Violation definitions ────────────────────────────────────────────────────
+// w:0 = logged only, no termination score
+// Serious cheating events score; natural behaviours log only
 const VIOLS = {
-  phone_detected:   { w:4, c:'#DC2626', lbl:'Mobile phone detected',          Icon:Smartphone },
-  multiple_faces:   { w:3, c:'#DC2626', lbl:'Multiple people in frame',        Icon:Users      },
-  devtools_open:    { w:3, c:'#DC2626', lbl:'Browser DevTools opened',         Icon:Keyboard   },
-  face_not_detected:{ w:2, c:'#EF4444', lbl:'Face not visible',                Icon:EyeOff     },
-  audio_detected:   { w:1, c:'#8B5CF6', lbl:'Speaking detected',               Icon:Mic        },
-  tab_switch:       { w:2, c:'#EF4444', lbl:'Switched tabs / minimised',       Icon:MonitorOff },
-  fullscreen_exit:  { w:2, c:'#8B5CF6', lbl:'Exited fullscreen',               Icon:Maximize2  },
-  copy_attempt:     { w:2, c:'#EF4444', lbl:'Copy blocked',                    Icon:Copy       },
-  paste_attempt:    { w:2, c:'#EF4444', lbl:'Paste blocked',                   Icon:Copy       },
+  phone_detected:   { w:5, c:'#DC2626', lbl:'Mobile phone detected',          Icon:Smartphone },
+  multiple_faces:   { w:4, c:'#DC2626', lbl:'Multiple people in frame',        Icon:Users      },
+  devtools_open:    { w:4, c:'#DC2626', lbl:'Browser DevTools opened',         Icon:Keyboard   },
+  copy_attempt:     { w:3, c:'#EF4444', lbl:'Copy blocked',                    Icon:Copy       },
+  paste_attempt:    { w:3, c:'#EF4444', lbl:'Paste blocked',                   Icon:Copy       },
+  tab_switch:       { w:3, c:'#EF4444', lbl:'Switched tabs / minimised',       Icon:MonitorOff },
   keyboard_shortcut:{ w:2, c:'#EF4444', lbl:'Blocked shortcut',                Icon:Keyboard   },
-  gaze_away:        { w:1, c:'#F59E0B', lbl:'Looking away from screen',        Icon:Eye        },
-  head_turn:        { w:1, c:'#F59E0B', lbl:'Head turned sideways',            Icon:Eye        },
-  eyes_closed:      { w:1, c:'#F59E0B', lbl:'Eyes closed / looking down',      Icon:EyeOff     },
-  window_blur:      { w:1, c:'#F59E0B', lbl:'Window lost focus',               Icon:MonitorOff },
+  fullscreen_exit:  { w:2, c:'#8B5CF6', lbl:'Exited fullscreen',               Icon:Maximize2  },
+  face_not_detected:{ w:1, c:'#EF4444', lbl:'Face not visible',                Icon:EyeOff     },
+  audio_detected:   { w:0, c:'#8B5CF6', lbl:'Speaking detected',               Icon:Mic        },
+  gaze_away:        { w:0, c:'#F59E0B', lbl:'Looking away from screen',        Icon:Eye        },
+  head_turn:        { w:0, c:'#F59E0B', lbl:'Head turned sideways',            Icon:Eye        },
+  eyes_closed:      { w:0, c:'#F59E0B', lbl:'Eyes closed / looking down',      Icon:EyeOff     },
+  window_blur:      { w:0, c:'#F59E0B', lbl:'Window lost focus',               Icon:MonitorOff },
   evidence_snapshot:{ w:0, c:'#10B981', lbl:'Evidence captured',               Icon:Shield     },
 };
 
@@ -578,12 +580,152 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   );
 
   return (
-    <div style={{ position:'relative', userSelect:'none' }}>
+    <div style={{ display:'flex', height:'100vh', userSelect:'none', overflow:'hidden', position:'relative' }}>
 
-      {/* Hidden analysis video — ALWAYS in DOM (never conditionally rendered) */}
-      <video ref={videoRef} autoPlay muted playsInline
-        style={{ position:'fixed',top:-9999,left:-9999,width:320,height:240,pointerEvents:'none' }}
-      />
+      {/* ── LEFT 70% — assessment content ── */}
+      <div style={{ flex:'0 0 70%', width:'70%', height:'100vh', overflow:'auto',
+        paddingTop: warning && warning.w !== 0 ? 48 : 0, transition:'padding-top 0.2s' }}>
+        {children}
+      </div>
+
+      {/* ── RIGHT 30% — proctor panel ── */}
+      <div style={{ flex:'0 0 30%', width:'30%', height:'100vh',
+        background:'#0A0F1E', borderLeft:'1px solid #1E293B',
+        display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+        {/* Status header */}
+        <div style={{ padding:'10px 14px', borderBottom:'1px solid #1E293B',
+          display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+          <span style={{ width:8, height:8, borderRadius:'50%', flexShrink:0,
+            background: mpReady && cocoReady ? statusColor : '#6B7280',
+            boxShadow: mpReady && cocoReady ? `0 0 6px ${statusColor}` : 'none',
+            animation: mpReady && cocoReady ? 'procPulse 2s infinite' : 'none' }} />
+          <span style={{ fontSize:11, color:'#94A3B8', flex:1 }}>{modelStatus}</span>
+          {weighted > 0 && (
+            <span style={{ fontSize:10, color:statusColor, fontWeight:700 }}>
+              {weighted}/{T.MAX_W}pts
+            </span>
+          )}
+        </div>
+
+        {/* Webcam feed */}
+        <div style={{ position:'relative', flexShrink:0, background:'#000' }}>
+          <video ref={videoRef} autoPlay muted playsInline
+            style={{ width:'100%', aspectRatio:'4/3', objectFit:'cover',
+              display:'block', transform:'scaleX(-1)' }} />
+
+          {/* Debug iris canvas overlay */}
+          <canvas ref={dbgCanvas} width={160} height={120}
+            style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%',
+              opacity: mpReady ? 0.6 : 0, transition:'opacity 0.5s', pointerEvents:'none' }}
+            title="Eye tracker" />
+
+          {/* Camera switcher */}
+          {cameras.length > 1 && (
+            <div style={{ position:'absolute', bottom:6, left:0, right:0,
+              display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap', padding:'0 6px' }}>
+              {cameras.map(cam => (
+                <button key={cam.deviceId} onClick={() => setActiveCamId(cam.deviceId)}
+                  style={{ padding:'2px 7px', fontSize:9, borderRadius:4, cursor:'pointer',
+                    border:`1px solid ${cam.deviceId === activeCamId ? statusColor : '#334155'}`,
+                    background: cam.deviceId === activeCamId ? `${statusColor}33` : 'rgba(0,0,0,0.7)',
+                    color:'#fff' }} title={cam.label}>
+                  {isBuiltin(cam.label) ? '💻' : '📷'} {cam.label?.split('(')[0].trim().slice(0,8) || 'Cam'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Score bar under webcam */}
+          {weighted > 0 && (
+            <div style={{ position:'absolute', bottom:0, left:0, right:0, height:3,
+              background:'rgba(0,0,0,0.4)' }}>
+              <div style={{ height:'100%', width:`${pct}%`, background:statusColor,
+                transition:'width 0.5s, background 0.5s' }} />
+            </div>
+          )}
+        </div>
+
+        {/* Violation log — scrollable */}
+        <div style={{ flex:1, overflow:'auto', display:'flex', flexDirection:'column' }}>
+          {/* Log header */}
+          <div style={{ padding:'8px 12px', borderBottom:'1px solid #1E293B',
+            display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+            <span style={{ fontSize:11, color:'#64748B', fontWeight:600 }}>INTEGRITY LOG</span>
+            {weighted >= T.MAX_W - 8 && weighted < T.MAX_W && (
+              <span style={{ fontSize:10, color:'#EF4444', fontWeight:700 }}>
+                ⛔ {T.MAX_W - weighted}pts left
+              </span>
+            )}
+          </div>
+
+          {log.length === 0 ? (
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+              color:'#1E293B', fontSize:12, textAlign:'center', padding:16 }}>
+              No events yet
+            </div>
+          ) : (
+            <div style={{ padding:'4px 0' }}>
+              {log.map((e, i) => (
+                <div key={i} style={{ padding:'6px 12px', fontSize:11,
+                  borderBottom:'1px solid #0F172A',
+                  display:'flex', alignItems:'flex-start', gap:8 }}>
+                  <span style={{ color:e.color, fontSize:8, marginTop:3, flexShrink:0 }}>●</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ color:'#CBD5E1', overflow:'hidden',
+                      textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.label}</div>
+                    <div style={{ color:'#475569', fontSize:9, marginTop:2 }}>{e.time}</div>
+                  </div>
+                  {VIOLS[e.type]?.w > 0 && (
+                    <span style={{ fontSize:10, color:e.color, fontWeight:700, flexShrink:0 }}>
+                      +{VIOLS[e.type].w}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Warning banner — full width ── */}
+      {warning && warning.w !== 0 && (
+        <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:99999,
+          padding:'13px 20px', background:warning.c, color:'#fff',
+          display:'flex', alignItems:'center', gap:12, fontWeight:600, fontSize:14,
+          boxShadow:`0 3px 20px ${warning.c}90`, animation:'warnSlide 0.2s ease' }}>
+          {warning.Icon && <warning.Icon size={18} />}
+          <span>⚠ {warning.lbl} — recorded</span>
+          <span style={{ marginLeft:'auto', opacity:0.85, fontSize:12, fontWeight:400 }}>
+            {weighted}/{T.MAX_W} pts · {T.MAX_W - weighted} remaining
+          </span>
+        </div>
+      )}
+
+      {/* ── Fullscreen gate ── */}
+      {needsFS && (
+        <div style={{ position:'fixed', inset:0, zIndex:99998,
+          background:'rgba(0,0,0,0.92)', display:'flex', flexDirection:'column',
+          alignItems:'center', justifyContent:'center', gap:18, padding:40, textAlign:'center' }}>
+          <Maximize2 size={52} color="#8B5CF6" />
+          <div style={{ fontSize:22, fontWeight:700, color:'#fff' }}>Fullscreen Required</div>
+          <div style={{ fontSize:14, color:'#9CA3AF', maxWidth:420, lineHeight:1.7 }}>
+            Exiting fullscreen has been flagged. Please return to continue.
+          </div>
+          <button onClick={() => document.documentElement.requestFullscreen?.()}
+            style={{ padding:'12px 32px', background:'#8B5CF6', color:'#fff',
+              border:'none', borderRadius:10, fontSize:15, fontWeight:600, cursor:'pointer' }}>
+            Return to Fullscreen
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes warnSlide { from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1} }
+        @keyframes procPulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+      `}</style>
+    </div>
+  );
 
       {/* Mini debug iris canvas */}
       <canvas ref={dbgCanvas} width={160} height={120}
@@ -701,15 +843,4 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
         </div>
       )}
 
-      {/* Assessment content */}
-      <div style={{ paddingTop: warning&&warning.w!==0 ? 48 : 3, transition:'padding-top 0.2s' }}>
-        {children}
-      </div>
-
-      <style>{`
-        @keyframes warnSlide { from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1} }
-        @keyframes procPulse { 0%,100%{opacity:1}50%{opacity:0.3} }
-      `}</style>
-    </div>
-  );
 }
