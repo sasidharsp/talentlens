@@ -100,6 +100,9 @@ def seed_defaults():
                 violation_weights JSONB DEFAULT '{}'::jsonb,
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             )""",
+            "ALTER TABLE proctoring_config ADD COLUMN IF NOT EXISTS snap_ms INTEGER DEFAULT 10000",
+            "ALTER TABLE proctoring_config ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE proctoring_config ADD COLUMN IF NOT EXISTS violation_weights JSONB DEFAULT '{}'::jsonb",
         ]
         for sql in migrations:
             try:

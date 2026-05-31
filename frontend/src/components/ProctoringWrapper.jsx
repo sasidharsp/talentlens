@@ -153,8 +153,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   const phoneFrames = useRef(0);
   const phoneEvents = useRef(0);
   const weightedRef = useRef(0);
-  const tRef        = useRef({...T}); // updated when server config loads
-
+  
   const [cameras,       setCameras]       = useState([]);
   const [activeCamId,   setActiveCamId]   = useState(null);
   const [webcamStream,  setWebcamStream]  = useState(null);
@@ -167,33 +166,12 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   const [camError,      setCamError]      = useState('');
 
   // ── Server-driven config ──────────────────────────────────────────
-  const [procCfg,       setProcCfg]       = useState(null);   // null = loading
   const [procEnabled,   setProcEnabled]   = useState(true);   // optimistic default
 
   useEffect(() => {
     api.get('/candidate/proctor-config')
       .then(r => {
-        setProcCfg(r.data);
         setProcEnabled(r.data.enabled !== false);
-        // Update tRef so callbacks immediately use server values
-        if (r.data.enabled !== false) {
-          tRef.current = {
-            ...T,
-            MAX_W:        r.data.max_weight       ?? T.MAX_W,
-            GRACE:        r.data.grace_frames     ?? T.GRACE,
-            COOLDOWN:     r.data.cooldown_ms      ?? T.COOLDOWN,
-            AUDIO_RMS:    r.data.audio_rms        ?? T.AUDIO_RMS,
-            AUDIO_HOLD:   r.data.audio_hold_ms    ?? T.AUDIO_HOLD,
-            PHONE_CONF:   r.data.phone_confidence ?? T.PHONE_CONF,
-            PHONE_FRAMES: r.data.phone_frames     ?? T.PHONE_FRAMES,
-            PHONE_TERM:   r.data.phone_term_count ?? T.PHONE_TERM,
-            H_GAZE:       r.data.gaze_h           ?? T.H_GAZE,
-            V_UP:         r.data.gaze_v_up        ?? T.V_UP,
-            V_DOWN:       r.data.gaze_v_down      ?? T.V_DOWN,
-            HEAD:         r.data.head_thresh      ?? T.HEAD,
-            SNAP_MS:      r.data.snap_ms          ?? T.SNAP_MS,
-          };
-        }
       })
       .catch(() => {
         // Network error — fall back to defaults (enabled)
@@ -206,7 +184,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   const logViol = useCallback((type, extra = {}, snapshot = null) => {
     const now  = Date.now();
     const meta = VIOLS[type];
-    const cd   = meta?.w === 0 ? 500 : tRef.current.COOLDOWN;
+    const cd   = meta?.w === 0 ? 500 : T.COOLDOWN;
     if ((lastLogged.current[type] || 0) + cd > now) return;
     lastLogged.current[type] = now;
 
@@ -232,7 +210,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     setLog(p => [{ type, label: meta?.lbl ?? type, color: meta?.c ?? '#EF4444',
       time: new Date().toLocaleTimeString(), w }, ...p].slice(0, 20));
 
-    if (weightedRef.current >= tRef.current.MAX_W && onTerminate) {
+    if (weightedRef.current >= T.MAX_W && onTerminate) {
       api.post(`/candidate/terminate/${token}`, {
         reason: `Auto-terminated: ${weightedRef.current} weighted violations`,
       }).catch(() => {});
@@ -258,7 +236,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     if (faces.length === 0) {
       badFrames.current.noface = (badFrames.current.noface||0) + 1;
       ['gaze','head','ear','multi'].forEach(k => { badFrames.current[k] = 0; });
-      if (badFrames.current.noface >= tRef.current.GRACE) {
+      if (badFrames.current.noface >= T.GRACE) {
         logViol('face_not_detected'); badFrames.current.noface = 0;
       }
       return;
@@ -267,7 +245,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
     if (faces.length > 1) {
       badFrames.current.multi = (badFrames.current.multi||0) + 1;
-      if (badFrames.current.multi >= tRef.current.GRACE) {
+      if (badFrames.current.multi >= T.GRACE) {
         logViol('multiple_faces', { count: faces.length }, captureFrame());
         badFrames.current.multi = 0;
       }
@@ -282,7 +260,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     const vOff = vGaze < 0.5 - T.V_UP ? 'up' : vGaze > 0.5 + T.V_DOWN ? 'down' : null;
     if (hOff > T.H_GAZE || vOff) {
       badFrames.current.gaze = (badFrames.current.gaze||0) + 1;
-      if (badFrames.current.gaze >= tRef.current.GRACE) {
+      if (badFrames.current.gaze >= T.GRACE) {
         const dir = hGaze < 0.5 - T.H_GAZE ? 'right' : hGaze > 0.5 + T.H_GAZE ? 'left' : vOff;
         logViol('gaze_away', { dir, h: hGaze.toFixed(3), v: vGaze.toFixed(3) });
         badFrames.current.gaze = 0;
@@ -292,7 +270,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     // Head turn
     if (Math.abs(noseOff) > T.HEAD) {
       badFrames.current.head = (badFrames.current.head||0) + 1;
-      if (badFrames.current.head >= tRef.current.GRACE) {
+      if (badFrames.current.head >= T.GRACE) {
         logViol('head_turn', { dir: noseOff > 0 ? 'right' : 'left' });
         badFrames.current.head = 0;
       }
@@ -332,11 +310,11 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
     const preds = await coco.detect(v).catch(() => []);
     const PHONE_CLASSES = new Set(['cell phone', 'remote', 'book']);
-    const phones = preds.filter(p => PHONE_CLASSES.has(p.class) && p.score >= tRef.current.PHONE_CONF);
+    const phones = preds.filter(p => PHONE_CLASSES.has(p.class) && p.score >= T.PHONE_CONF);
 
     if (phones.length > 0) {
       phoneFrames.current += 1;
-      if (phoneFrames.current >= tRef.current.PHONE_FRAMES) {
+      if (phoneFrames.current >= T.PHONE_FRAMES) {
         phoneFrames.current = 0;
         phoneEvents.current += 1;
         const snap = captureFrame(0.92);
@@ -347,7 +325,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
         }, snap);
 
         // Auto-terminate after N confirmed phone events
-        if (phoneEvents.current >= tRef.current.PHONE_TERM && onTerminate) {
+        if (phoneEvents.current >= T.PHONE_TERM && onTerminate) {
           api.post(`/candidate/terminate/${token}`, {
             reason: `Auto-terminated: phone detected ${phoneEvents.current} times`,
           }).catch(() => {});
@@ -487,9 +465,9 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           anal.getByteFrequencyData(data);
           const voice = Array.from(data.slice(3, 40));
           const rms = Math.sqrt(voice.reduce((s,v)=>s+v*v,0)/voice.length);
-          if (rms > tRef.current.AUDIO_RMS) {
+          if (rms > T.AUDIO_RMS) {
             if (!audioHold.current) audioHold.current = Date.now();
-            else if (Date.now() - audioHold.current > tRef.current.AUDIO_HOLD) {
+            else if (Date.now() - audioHold.current > T.AUDIO_HOLD) {
               logViol('audio_detected', { rms: rms.toFixed(1) });
               audioHold.current = null;
             }
@@ -588,7 +566,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
       }
     };
     const initTimer  = setTimeout(doSnap, 15000);          // first at 15 s
-    const snapTimer  = setInterval(doSnap, tRef.current.SNAP_MS);     // then every 90 s
+    const snapTimer  = setInterval(doSnap, T.SNAP_MS);     // then every 90 s
     return () => { clearTimeout(initTimer); clearInterval(snapTimer); };
   }, [logViol, captureFrame]);
 
@@ -600,35 +578,13 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   }, [webcamStream]);
 
   // ─── Derived display values ───────────────────────────────────────────────
-  const pct = Math.min(100, (weighted / ET.MAX_W) * 100);
+  const pct = Math.min(100, (weighted / T.MAX_W) * 100);
   const statusColor = weighted === 0 ? '#10B981' : weighted < 6 ? '#F59E0B'
     : weighted < 14 ? '#EF4444' : '#7F1D1D';
   const modelStatus = !webcamStream ? 'Starting camera…'
     : !mpReady ? 'Loading eye tracker…'
     : !cocoReady ? 'Loading phone detector…'
     : `Proctoring active${weighted > 0 ? ` · ${weighted} pts` : ''}`;
-
-  // ── Apply server config over hardcoded T (after all hooks) ─────────────────
-  const cfg = procCfg || {};
-  const ET = {
-    ...T,
-    MAX_W:        cfg.max_weight       ?? T.MAX_W,
-    GRACE:        cfg.grace_frames     ?? T.GRACE,
-    COOLDOWN:     cfg.cooldown_ms      ?? T.COOLDOWN,
-    AUDIO_RMS:    cfg.audio_rms        ?? T.AUDIO_RMS,
-    AUDIO_HOLD:   cfg.audio_hold_ms    ?? T.AUDIO_HOLD,
-    PHONE_CONF:   cfg.phone_confidence ?? T.PHONE_CONF,
-    PHONE_FRAMES: cfg.phone_frames     ?? T.PHONE_FRAMES,
-    PHONE_TERM:   cfg.phone_term_count ?? T.PHONE_TERM,
-    H_GAZE:       cfg.gaze_h           ?? T.H_GAZE,
-    V_UP:         cfg.gaze_v_up        ?? T.V_UP,
-    V_DOWN:       cfg.gaze_v_down      ?? T.V_DOWN,
-    HEAD:         cfg.head_thresh      ?? T.HEAD,
-    SNAP_MS:      cfg.snap_ms          ?? T.SNAP_MS,
-  };
-  const violWeights = cfg.violation_weights || {};
-  const getViolW = (type) =>
-    violWeights[type] !== undefined ? violWeights[type] : (VIOLS[type]?.w ?? 0);
 
   // ── If proctoring disabled by admin — pure assessment, no camera/ML ─────────
   if (!procEnabled) return <>{children}</>;
@@ -681,7 +637,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           <span style={{ fontSize:11, color:'#94A3B8', flex:1 }}>{modelStatus}</span>
           {weighted > 0 && (
             <span style={{ fontSize:10, color:statusColor, fontWeight:700 }}>
-              {weighted}/{ET.MAX_W}pts
+              {weighted}/{T.MAX_W}pts
             </span>
           )}
         </div>
@@ -715,8 +671,8 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
             display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
             <span style={{ fontSize:11, color:'#64748B', fontWeight:600 }}>INTEGRITY LOG</span>
             <span style={{ fontSize:11, fontWeight:700,
-              color: weighted === 0 ? '#10B981' : weighted < ET.MAX_W * 0.6 ? '#F59E0B' : '#EF4444' }}>
-              {weighted}/{ET.MAX_W} pts
+              color: weighted === 0 ? '#10B981' : weighted < T.MAX_W * 0.6 ? '#F59E0B' : '#EF4444' }}>
+              {weighted}/{T.MAX_W} pts
             </span>
           </div>
 
@@ -757,7 +713,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           {warning.Icon && <warning.Icon size={18} />}
           <span>⚠ {warning.lbl} — recorded</span>
           <span style={{ marginLeft:'auto', opacity:0.85, fontSize:12, fontWeight:400 }}>
-            {weighted}/{ET.MAX_W} pts · {ET.MAX_W - weighted} remaining
+            {weighted}/{T.MAX_W} pts · {T.MAX_W - weighted} remaining
           </span>
         </div>
       )}
@@ -845,7 +801,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           {warning.Icon && <warning.Icon size={18}/>}
           <span>⚠ {warning.lbl} — recorded</span>
           <span style={{ marginLeft:'auto',opacity:0.85,fontSize:12,fontWeight:400 }}>
-            {weighted}/{ET.MAX_W} pts · {T.MAX_W-weighted} remaining
+            {weighted}/{T.MAX_W} pts · {T.MAX_W-weighted} remaining
           </span>
         </div>
       )}
