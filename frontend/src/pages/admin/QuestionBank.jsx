@@ -347,7 +347,7 @@ export default function QuestionBank() {
         {/* Round 2 inline */}
         {seg === 'r2' && <Round2Questions />}
 
-        {/* Import result */}
+        {seg !== 'r2' && (<>
         <ImportResult result={importResult} onClose={() => setImportResult(null)} />
 
         {/* Batch tag filter chips */}
@@ -569,6 +569,8 @@ export default function QuestionBank() {
             </>
           )}
         </div>
+
+        </>)}
       </div>
     </div>
   );

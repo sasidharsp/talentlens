@@ -4,7 +4,7 @@ Handles: candidate listing, evaluation triggering, interview rounds, status mana
 """
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -1133,8 +1133,10 @@ def get_live_sessions(
     current_user: models.User = Depends(require_any_staff),
 ):
     """Real-time view of all active assessment sessions for live monitor."""
+    cutoff = datetime.utcnow() - timedelta(hours=4)
     sessions = db.query(models.AssessmentSession).filter(
-        models.AssessmentSession.status.in_(["IN_PROGRESS", "REGISTERED"])
+        models.AssessmentSession.status.in_(["IN_PROGRESS", "REGISTERED"]),
+        models.AssessmentSession.created_at >= cutoff,
     ).order_by(models.AssessmentSession.id.desc()).all()
 
     items = []

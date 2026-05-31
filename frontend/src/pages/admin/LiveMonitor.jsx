@@ -221,7 +221,7 @@ export default function LiveMonitor() {
   const [filter,     setFilter]     = useState('all');
   const intervalRef  = useRef(null);
 
-  const fetch = useCallback(async () => {
+  const loadSessions = useCallback(async () => {
     try {
       const { data } = await api.get('/admin/live-sessions');
       setSessions(data.sessions || []);
@@ -231,14 +231,14 @@ export default function LiveMonitor() {
   }, []);
 
   useEffect(() => {
-    fetch();
-    intervalRef.current = setInterval(fetch, 5000);
+    loadSessions();
+    intervalRef.current = setInterval(loadSessions, 5000);
     return () => clearInterval(intervalRef.current);
-  }, [fetch]);
+  }, [loadSessions]);
 
   const terminate = async (sessionId) => {
     await api.post(`/admin/candidates/${sessionId}/terminate`, { reason: 'Manually terminated by admin' });
-    fetch();
+    loadSessions();
   };
 
   const live       = sessions.filter(s => !['terminated','SUBMITTED'].includes(s.proctoring_status) && s.status === 'IN_PROGRESS').length;
@@ -281,7 +281,7 @@ export default function LiveMonitor() {
             {lastRefresh && ` · Last update: ${lastRefresh.toLocaleTimeString()}`}
           </div>
         </div>
-        <button onClick={fetch}
+        <button onClick={loadSessions}
           style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px',
             background:'#1E293B', border:'1px solid #334155', borderRadius:8,
             color:'#CBD5E1', cursor:'pointer', fontSize:13 }}>
