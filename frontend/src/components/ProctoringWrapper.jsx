@@ -168,31 +168,6 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
       .catch(() => setCfg(null)); // fall back to hardcoded T
   }, []);
 
-  // If proctoring is disabled — just render children, no ML, no overhead
-  if (procDisabled) return <>{children}</>;
-  // While loading config, still render children (detection starts after)
-  const effective = cfg || {}; // merge with hardcoded T below
-
-  // Effective thresholds — server values override hardcoded T
-  const ET = {
-    ...T,
-    MAX_W:        effective.max_weight    ?? ET.MAX_W,
-    GRACE:        effective.grace_frames  ?? ET.GRACE,
-    COOLDOWN:     effective.cooldown_ms   ?? T.COOLDOWN,
-    AUDIO_RMS:    effective.audio_rms     ?? ET.AUDIO_RMS,
-    AUDIO_HOLD:   effective.audio_hold_ms ?? ET.AUDIO_HOLD,
-    PHONE_CONF:   effective.phone_confidence ?? ET.PHONE_CONF,
-    PHONE_FRAMES: effective.phone_frames  ?? ET.PHONE_FRAMES,
-    PHONE_TERM:   effective.phone_term_count ?? ET.PHONE_TERM,
-    H_GAZE:       effective.gaze_h        ?? ET.H_GAZE,
-    V_UP:         effective.gaze_v_up     ?? ET.V_UP,
-    V_DOWN:       effective.gaze_v_down   ?? ET.V_DOWN,
-    HEAD:         effective.head_thresh   ?? ET.HEAD,
-  };
-  // Effective weights — merge server weights into VIOLS
-  const EW = effective.violation_weights || {};
-  const getW = type => EW[type] !== undefined ? EW[type] : (VIOLS[type]?.w ?? 1);
-
   const [cameras,       setCameras]       = useState([]);
   const [activeCamId,   setActiveCamId]   = useState(null);
   const [webcamStream,  setWebcamStream]  = useState(null);
@@ -597,6 +572,29 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     : !mpReady ? 'Loading eye tracker…'
     : !cocoReady ? 'Loading phone detector…'
     : `Proctoring active${weighted > 0 ? ` · ${weighted} pts` : ''}`;
+
+  // Compute effective thresholds from server config (safe — all hooks already called)
+  const effective = cfg || {};
+  const ET = {
+    ...T,
+    MAX_W:        effective.max_weight    ?? T.MAX_W,
+    GRACE:        effective.grace_frames  ?? T.GRACE,
+    COOLDOWN:     effective.cooldown_ms   ?? T.COOLDOWN,
+    AUDIO_RMS:    effective.audio_rms     ?? T.AUDIO_RMS,
+    AUDIO_HOLD:   effective.audio_hold_ms ?? T.AUDIO_HOLD,
+    PHONE_CONF:   effective.phone_confidence ?? T.PHONE_CONF,
+    PHONE_FRAMES: effective.phone_frames  ?? T.PHONE_FRAMES,
+    PHONE_TERM:   effective.phone_term_count ?? T.PHONE_TERM,
+    H_GAZE:       effective.gaze_h        ?? T.H_GAZE,
+    V_UP:         effective.gaze_v_up     ?? T.V_UP,
+    V_DOWN:       effective.gaze_v_down   ?? T.V_DOWN,
+    HEAD:         effective.head_thresh   ?? T.HEAD,
+  };
+  const EW  = effective.violation_weights || {};
+  const getW = type => EW[type] !== undefined ? EW[type] : (VIOLS[type]?.w ?? 1);
+
+  // If proctoring disabled by admin — render children only, no monitoring
+  if (procDisabled) return <>{children}</>;
 
   if (camError) return (
     <div style={{ display:'flex',flexDirection:'column',alignItems:'center',
