@@ -1,7 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import { Search, Filter, ChevronLeft, ChevronRight, Loader, Trash2, Upload } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, Loader, Trash2, Upload, Download } from 'lucide-react';
+
+const exportCSV = (items) => {
+  const headers = ['Name','Email','Reference','Role','Status','Decision','Score','Date'];
+  const rows = items.map(c => [
+    c.full_name, c.email, c.reference_code, c.role_display || '',
+    c.status, c.final_status || '', c.overall_score || '',
+    c.submitted_at ? new Date(c.submitted_at).toLocaleString('en-IN') : '',
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `candidates_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+};
 
 const statusBadge = (s) => {
   const m = { REGISTERED:'badge-gray', IN_PROGRESS:'badge-amber', SUBMITTED:'badge-sky', EVALUATED:'badge-indigo', selected:'badge-green', rejected:'badge-red', pending:'badge-amber', on_hold:'badge-amber' };
@@ -16,7 +30,8 @@ export default function CandidateList() {
   const [data, setData] = useState({ items: [], total: 0, total_pages: 1 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
+  const [status,   setStatus]   = useState('');
+  const [decision, setDecision] = useState('');
   const [loading, setLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const fileRef = useRef();
@@ -25,12 +40,13 @@ export default function CandidateList() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, page_size: 20 });
-      if (search) params.set('search', search);
-      if (status) params.set('status', status);
+      if (search)   params.set('search', search);
+      if (status)   params.set('status', status);
+      if (decision) params.set('final_status', decision);
       const r = await api.get(`/admin/candidates?${params}`);
       setData(r.data);
     } finally { setLoading(false); }
-  }, [page, search, status]);
+  }, [page, search, status, decision]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -70,6 +86,9 @@ export default function CandidateList() {
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current.click()}>
             <Upload size={14} /> Bulk Import
           </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => exportCSV(data.items)}>
+            <Download size={14} /> Export CSV
+          </button>
         </div>
       </div>
 
@@ -91,9 +110,16 @@ export default function CandidateList() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Filter size={14} color="var(--text-3)" />
-            <select className="input" style={{ width: 180 }} value={status} onChange={e => handleStatus(e.target.value)}>
+            <select className="input" style={{ width: 180 }} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
               <option value="">All statuses</option>
               {STATUSES.filter(Boolean).map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
+            </select>
+            <select className="input" style={{ width: 160 }} value={decision} onChange={e => { setDecision(e.target.value); setPage(1); }}>
+              <option value="">All decisions</option>
+              <option value="selected">Selected</option>
+              <option value="rejected">Rejected</option>
+              <option value="on_hold">On Hold</option>
+              <option value="pending">Pending</option>
             </select>
           </div>
         </div>
@@ -129,7 +155,11 @@ export default function CandidateList() {
                           {c.overall_score != null ? `${c.overall_score.toFixed(1)}%` : '—'}
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                          {c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-IN') : c.registered_at ? new Date(c.registered_at).toLocaleDateString('en-IN') : '—'}
+                          {c.submitted_at
+                            ? new Date(c.submitted_at).toLocaleString('en-IN', { dateStyle:'short', timeStyle:'short' })
+                            : c.registered_at
+                            ? new Date(c.registered_at).toLocaleString('en-IN', { dateStyle:'short', timeStyle:'short' })
+                            : '—'}
                         </td>
                         <td>
                           {c.ai_verdict

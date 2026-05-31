@@ -155,11 +155,7 @@ export default function Assessment() {
                   <span style={{ background: info.bg, color: info.color, borderRadius: 7, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
                     Q {current + 1} / {questions.length}
                   </span>
-                  {q.difficulty && (
-                    <span className={`badge ${q.difficulty === 'high' ? 'badge-red' : q.difficulty === 'medium' ? 'badge-amber' : 'badge-green'}`}>
-                      {q.difficulty}
-                    </span>
-                  )}
+                  {/* difficulty hidden from candidate view */}
                 </div>
 
                 {/* Question text */}

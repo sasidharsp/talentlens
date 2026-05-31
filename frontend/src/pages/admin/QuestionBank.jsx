@@ -319,7 +319,7 @@ export default function QuestionBank() {
       </div>
 
       <div className="admin-content page-fade">
-        {/* Segment tabs */}
+        {/* Segment tabs + Round 2 */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
           {[1, 2, 3].map(s => (
             <button key={s} onClick={() => setSeg(s)} style={{
@@ -332,7 +332,25 @@ export default function QuestionBank() {
               {SEG_CONFIG[s].label.split('—')[0].trim()}
             </button>
           ))}
+          <button onClick={() => setSeg('r2')} style={{
+            padding: '9px 20px', border: 'none', cursor: 'pointer', background: 'none',
+            fontSize: 14, fontWeight: 500,
+            color: seg === 'r2' ? '#7C3AED' : 'var(--text-2)',
+            borderBottom: seg === 'r2' ? '2px solid #7C3AED' : '2px solid transparent',
+            marginBottom: -1, transition: 'all 0.15s',
+          }}>
+            Round 2
+          </button>
         </div>
+
+        {/* Round 2 iframe/redirect */}
+        {seg === 'r2' && (
+          <iframe
+            src="/admin/r2/questions"
+            style={{ width:'100%', height:'calc(100vh - 200px)', border:'none', borderRadius:8 }}
+            title="Round 2 Question Bank"
+          />
+        )}
 
         {/* Import result */}
         <ImportResult result={importResult} onClose={() => setImportResult(null)} />

@@ -72,7 +72,7 @@ const T = {
   AUDIO_HOLD:9000,   // 9 seconds sustained before flagging
   GRACE:     12,     // ~1.2s at 10fps before violation counts
   COOLDOWN:  15000,  // 15s before same event fires again
-  SNAP_MS:   25000,  // evidence snapshot every 10s for admin audit
+  SNAP_MS:   10000,  // evidence snapshot every 10s for admin audit
   MAX_W:     60,     // raised — much harder to auto-terminate
   DEVTOOLS:  160,
 };

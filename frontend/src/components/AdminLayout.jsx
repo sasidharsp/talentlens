@@ -13,7 +13,6 @@ const allNavItems = [
   { to: '/admin/r2/candidates', label: 'Round 2', icon: Award, roles: ['admin','super_admin','interviewer'] },
   { to: '/admin/requisitions', label: 'Requisitions', icon: Briefcase, roles: ['admin','super_admin'] },
   { to: '/admin/questions', label: 'Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
-  { to: '/admin/r2/questions', label: 'R2 Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
   { to: '/admin/settings', label: 'Settings', icon: Settings, roles: ['admin','super_admin'] },
 ];
 
@@ -116,6 +115,14 @@ export default function AdminLayout() {
 
       {/* Main content */}
       <main className="admin-main">
+        <div style={{ position:'sticky', top:0, zIndex:10, background:'rgba(248,247,244,0.92)',
+          backdropFilter:'blur(8px)', borderBottom:'1px solid var(--border)',
+          padding:'8px 28px', display:'flex', justifyContent:'flex-end', alignItems:'center' }}>
+          <button onClick={handleLogout} className="btn btn-ghost btn-sm"
+            style={{ color:'var(--text-2)', gap:6 }}>
+            <LogOut size={14} /> Sign out
+          </button>
+        </div>
         <Outlet />
       </main>
     </div>

@@ -102,6 +102,7 @@ export default function Instructions() {
           {/* Custom instructions from admin */}
           {data.instructions && data.instructions !== 'Please complete all three segments carefully.' && (
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Additional Instructions</div>
               <div
                 className="instruction-content"
                 style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.8 }}
@@ -115,7 +116,7 @@ export default function Instructions() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <AlertTriangle size={17} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
               <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Important — Please read the instructions before starting</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Important — Please read before starting</div>
                 <ul style={{ fontSize: 13, color: '#92400E', lineHeight: 1.9, paddingLeft: 16 }}>
                   <li>The assessment is <strong>proctored</strong> — your webcam will be active and tab switches are monitored</li>
                   <li>Unanswered questions when time expires are submitted as blank</li>
