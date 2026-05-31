@@ -154,20 +154,6 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   const phoneEvents = useRef(0);
   const weightedRef = useRef(0);
 
-  // Server-driven config — overrides T and VIOLS weights
-  const [cfg,           setCfg]           = useState(null);  // null = loading
-  const [procDisabled,  setProcDisabled]  = useState(false);
-
-  // Fetch proctoring config on mount
-  useEffect(() => {
-    api.get('/candidate/proctor-config')
-      .then(r => {
-        if (!r.data.enabled) { setProcDisabled(true); setCfg(r.data); return; }
-        setCfg(r.data);
-      })
-      .catch(() => setCfg(null)); // fall back to hardcoded T
-  }, []);
-
   const [cameras,       setCameras]       = useState([]);
   const [activeCamId,   setActiveCamId]   = useState(null);
   const [webcamStream,  setWebcamStream]  = useState(null);
@@ -183,15 +169,13 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   const logViol = useCallback((type, extra = {}, snapshot = null) => {
     const now  = Date.now();
     const meta = VIOLS[type];
-    const w    = getW(type);
-    const cd   = w === 0 ? 500 : ET.COOLDOWN;
+    const cd   = meta?.w === 0 ? 500 : T.COOLDOWN;
     if ((lastLogged.current[type] || 0) + cd > now) return;
     lastLogged.current[type] = now;
 
-    if (w > 0) {
-      weightedRef.current += w;
-      setWeighted(weightedRef.current);
-    }
+    const w = meta?.w ?? 1;
+    weightedRef.current += w;
+    if (w > 0) setWeighted(weightedRef.current);
 
     api.post(`/candidate/proctor-event/${token}`, {
       event_type: type,
@@ -201,16 +185,14 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
       ...extra,
     }).catch(() => {});
 
-    // Always show in log — even w:0 events (log only, no score)
-    setLog(p => [{ type, label: meta?.lbl ?? type, color: meta?.c ?? '#EF4444',
-      time: new Date().toLocaleTimeString(), scored: w > 0 }, ...p].slice(0, 20));
-
     if (w > 0) {
+      setLog(p => [{ type, label: meta?.lbl ?? type, color: meta?.c ?? '#EF4444',
+        time: new Date().toLocaleTimeString() }, ...p].slice(0, 10));
       setWarning({ type, ...meta });
       setTimeout(() => setWarning(cur => cur?.type === type ? null : cur), 5000);
     }
 
-    if (weightedRef.current >= ET.MAX_W && onTerminate) {
+    if (weightedRef.current >= T.MAX_W && onTerminate) {
       api.post(`/candidate/terminate/${token}`, {
         reason: `Auto-terminated: ${weightedRef.current} weighted violations`,
       }).catch(() => {});
@@ -236,7 +218,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     if (faces.length === 0) {
       badFrames.current.noface = (badFrames.current.noface||0) + 1;
       ['gaze','head','ear','multi'].forEach(k => { badFrames.current[k] = 0; });
-      if (badFrames.current.noface >= ET.GRACE) {
+      if (badFrames.current.noface >= T.GRACE) {
         logViol('face_not_detected'); badFrames.current.noface = 0;
       }
       return;
@@ -245,7 +227,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
     if (faces.length > 1) {
       badFrames.current.multi = (badFrames.current.multi||0) + 1;
-      if (badFrames.current.multi >= ET.GRACE) {
+      if (badFrames.current.multi >= T.GRACE) {
         logViol('multiple_faces', { count: faces.length }, captureFrame());
         badFrames.current.multi = 0;
       }
@@ -257,27 +239,27 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
     // Gaze
     const hOff = Math.abs(hGaze - 0.5);
-    const vOff = vGaze < 0.5 - ET.V_UP ? 'up' : vGaze > 0.5 + ET.V_DOWN ? 'down' : null;
-    if (hOff > ET.H_GAZE || vOff) {
+    const vOff = vGaze < 0.5 - T.V_UP ? 'up' : vGaze > 0.5 + T.V_DOWN ? 'down' : null;
+    if (hOff > T.H_GAZE || vOff) {
       badFrames.current.gaze = (badFrames.current.gaze||0) + 1;
-      if (badFrames.current.gaze >= ET.GRACE) {
-        const dir = hGaze < 0.5 - ET.H_GAZE ? 'right' : hGaze > 0.5 + ET.H_GAZE ? 'left' : vOff;
+      if (badFrames.current.gaze >= T.GRACE) {
+        const dir = hGaze < 0.5 - T.H_GAZE ? 'right' : hGaze > 0.5 + T.H_GAZE ? 'left' : vOff;
         logViol('gaze_away', { dir, h: hGaze.toFixed(3), v: vGaze.toFixed(3) });
         badFrames.current.gaze = 0;
       }
     } else { badFrames.current.gaze = 0; }
 
     // Head turn
-    if (Math.abs(noseOff) > ET.HEAD) {
+    if (Math.abs(noseOff) > T.HEAD) {
       badFrames.current.head = (badFrames.current.head||0) + 1;
-      if (badFrames.current.head >= ET.GRACE) {
+      if (badFrames.current.head >= T.GRACE) {
         logViol('head_turn', { dir: noseOff > 0 ? 'right' : 'left' });
         badFrames.current.head = 0;
       }
     } else { badFrames.current.head = 0; }
 
     // Eye closure
-    if (ear < ET.EAR) {
+    if (ear < T.EAR) {
       badFrames.current.ear = (badFrames.current.ear||0) + 1;
       if (badFrames.current.ear >= 4) {
         logViol('eyes_closed', { ear: ear.toFixed(3) }); badFrames.current.ear = 0;
@@ -296,8 +278,8 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
       };
       [LM.LE_OUT,LM.LE_IN,LM.RE_OUT,LM.RE_IN,LM.LE_TOP,LM.LE_BOT,LM.RE_TOP,LM.RE_BOT]
         .forEach(i => dot(i,'rgba(0,200,255,0.5)'));
-      dot(LM.L_IRIS, ear < ET.EAR ? '#FF4444' : '#00FF88');
-      dot(LM.R_IRIS, ear < ET.EAR ? '#FF4444' : '#00FF88');
+      dot(LM.L_IRIS, ear < T.EAR ? '#FF4444' : '#00FF88');
+      dot(LM.R_IRIS, ear < T.EAR ? '#FF4444' : '#00FF88');
       dot(LM.NOSE, '#FF8800');
     }
   }, [logViol, captureFrame]);
@@ -310,11 +292,11 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
     const preds = await coco.detect(v).catch(() => []);
     const PHONE_CLASSES = new Set(['cell phone', 'remote', 'book']);
-    const phones = preds.filter(p => PHONE_CLASSES.has(p.class) && p.score >= ET.PHONE_CONF);
+    const phones = preds.filter(p => PHONE_CLASSES.has(p.class) && p.score >= T.PHONE_CONF);
 
     if (phones.length > 0) {
       phoneFrames.current += 1;
-      if (phoneFrames.current >= ET.PHONE_FRAMES) {
+      if (phoneFrames.current >= T.PHONE_FRAMES) {
         phoneFrames.current = 0;
         phoneEvents.current += 1;
         const snap = captureFrame(0.92);
@@ -325,7 +307,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
         }, snap);
 
         // Auto-terminate after N confirmed phone events
-        if (phoneEvents.current >= ET.PHONE_TERM && onTerminate) {
+        if (phoneEvents.current >= T.PHONE_TERM && onTerminate) {
           api.post(`/candidate/terminate/${token}`, {
             reason: `Auto-terminated: phone detected ${phoneEvents.current} times`,
           }).catch(() => {});
@@ -463,9 +445,9 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           anal.getByteFrequencyData(data);
           const voice = Array.from(data.slice(3, 40));
           const rms = Math.sqrt(voice.reduce((s,v)=>s+v*v,0)/voice.length);
-          if (rms > ET.AUDIO_RMS) {
+          if (rms > T.AUDIO_RMS) {
             if (!audioHold.current) audioHold.current = Date.now();
-            else if (Date.now() - audioHold.current > ET.AUDIO_HOLD) {
+            else if (Date.now() - audioHold.current > T.AUDIO_HOLD) {
               logViol('audio_detected', { rms: rms.toFixed(1) });
               audioHold.current = null;
             }
@@ -539,8 +521,8 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   // ── Effect 8: DevTools detector ───────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
-      if (window.outerWidth-window.innerWidth > ET.DEVTOOLS ||
-          window.outerHeight-window.innerHeight > ET.DEVTOOLS)
+      if (window.outerWidth-window.innerWidth > T.DEVTOOLS ||
+          window.outerHeight-window.innerHeight > T.DEVTOOLS)
         logViol('devtools_open');
     }, 5000);
     return () => clearInterval(id);
@@ -553,7 +535,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
       if (snap) logViol('evidence_snapshot', { thumbnail: snap }); api.post(`/candidate/proctor-snapshot/${token}`, { image_data: snap.split(',')[1], flag_reason: null, is_violation: false }).catch(() => {});
     };
     const initTimer  = setTimeout(doSnap, 15000);          // first at 15 s
-    const snapTimer  = setInterval(doSnap, ET.SNAP_MS);     // then every 90 s
+    const snapTimer  = setInterval(doSnap, T.SNAP_MS);     // then every 90 s
     return () => { clearTimeout(initTimer); clearInterval(snapTimer); };
   }, [logViol, captureFrame]);
 
@@ -565,36 +547,13 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   }, [webcamStream]);
 
   // ─── Derived display values ───────────────────────────────────────────────
-  const pct = Math.min(100, (weighted / ET.MAX_W) * 100);
+  const pct = Math.min(100, (weighted / T.MAX_W) * 100);
   const statusColor = weighted === 0 ? '#10B981' : weighted < 6 ? '#F59E0B'
     : weighted < 14 ? '#EF4444' : '#7F1D1D';
   const modelStatus = !webcamStream ? 'Starting camera…'
     : !mpReady ? 'Loading eye tracker…'
     : !cocoReady ? 'Loading phone detector…'
     : `Proctoring active${weighted > 0 ? ` · ${weighted} pts` : ''}`;
-
-  // Compute effective thresholds from server config (safe — all hooks already called)
-  const effective = cfg || {};
-  const ET = {
-    ...T,
-    MAX_W:        effective.max_weight    ?? T.MAX_W,
-    GRACE:        effective.grace_frames  ?? T.GRACE,
-    COOLDOWN:     effective.cooldown_ms   ?? T.COOLDOWN,
-    AUDIO_RMS:    effective.audio_rms     ?? T.AUDIO_RMS,
-    AUDIO_HOLD:   effective.audio_hold_ms ?? T.AUDIO_HOLD,
-    PHONE_CONF:   effective.phone_confidence ?? T.PHONE_CONF,
-    PHONE_FRAMES: effective.phone_frames  ?? T.PHONE_FRAMES,
-    PHONE_TERM:   effective.phone_term_count ?? T.PHONE_TERM,
-    H_GAZE:       effective.gaze_h        ?? T.H_GAZE,
-    V_UP:         effective.gaze_v_up     ?? T.V_UP,
-    V_DOWN:       effective.gaze_v_down   ?? T.V_DOWN,
-    HEAD:         effective.head_thresh   ?? T.HEAD,
-  };
-  const EW  = effective.violation_weights || {};
-  const getW = type => EW[type] !== undefined ? EW[type] : (VIOLS[type]?.w ?? 1);
-
-  // If proctoring disabled by admin — render children only, no monitoring
-  if (procDisabled) return <>{children}</>;
 
   if (camError) return (
     <div style={{ display:'flex',flexDirection:'column',alignItems:'center',
@@ -624,13 +583,13 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     <div style={{ display:'flex', height:'100vh', userSelect:'none', overflow:'hidden', position:'relative' }}>
 
       {/* ── LEFT 70% — assessment content ── */}
-      <div style={{ flex:'0 0 75%', width:'75%', height:'100vh', overflow:'auto',
+      <div style={{ flex:'0 0 70%', width:'70%', height:'100vh', overflow:'auto',
         paddingTop: warning && warning.w !== 0 ? 48 : 0, transition:'padding-top 0.2s' }}>
         {children}
       </div>
 
       {/* ── RIGHT 30% — proctor panel ── */}
-      <div style={{ flex:'0 0 25%', width:'25%', height:'100vh',
+      <div style={{ flex:'0 0 30%', width:'30%', height:'100vh',
         background:'#0A0F1E', borderLeft:'1px solid #1E293B',
         display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
@@ -644,7 +603,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           <span style={{ fontSize:11, color:'#94A3B8', flex:1 }}>{modelStatus}</span>
           {weighted > 0 && (
             <span style={{ fontSize:10, color:statusColor, fontWeight:700 }}>
-              {weighted}/{ET.MAX_W}pts
+              {weighted}/{T.MAX_W}pts
             </span>
           )}
         </div>
@@ -693,9 +652,9 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           <div style={{ padding:'8px 12px', borderBottom:'1px solid #1E293B',
             display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
             <span style={{ fontSize:11, color:'#64748B', fontWeight:600 }}>INTEGRITY LOG</span>
-            {weighted >= ET.MAX_W - 8 && weighted < ET.MAX_W && (
+            {weighted >= T.MAX_W - 8 && weighted < T.MAX_W && (
               <span style={{ fontSize:10, color:'#EF4444', fontWeight:700 }}>
-                ⛔ {ET.MAX_W - weighted}pts left
+                ⛔ {T.MAX_W - weighted}pts left
               </span>
             )}
           </div>
@@ -717,12 +676,10 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
                       textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.label}</div>
                     <div style={{ color:'#475569', fontSize:9, marginTop:2 }}>{e.time}</div>
                   </div>
-                  {VIOLS[e.type]?.w > 0 || (cfg?.violation_weights?.[e.type] ?? VIOLS[e.type]?.w ?? 0) > 0 ? (
+                  {VIOLS[e.type]?.w > 0 && (
                     <span style={{ fontSize:10, color:e.color, fontWeight:700, flexShrink:0 }}>
-                      +{getW ? getW(e.type) : (VIOLS[e.type]?.w ?? 0)}
+                      +{VIOLS[e.type].w}
                     </span>
-                  ) : (
-                    <span style={{ fontSize:9, color:'#475569', flexShrink:0 }}>log</span>
                   )}
                 </div>
               ))}
@@ -740,7 +697,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           {warning.Icon && <warning.Icon size={18} />}
           <span>⚠ {warning.lbl} — recorded</span>
           <span style={{ marginLeft:'auto', opacity:0.85, fontSize:12, fontWeight:400 }}>
-            {weighted}/{ET.MAX_W} pts · {ET.MAX_W - weighted} remaining
+            {weighted}/{T.MAX_W} pts · {T.MAX_W - weighted} remaining
           </span>
         </div>
       )}
@@ -828,7 +785,7 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
           {warning.Icon && <warning.Icon size={18}/>}
           <span>⚠ {warning.lbl} — recorded</span>
           <span style={{ marginLeft:'auto',opacity:0.85,fontSize:12,fontWeight:400 }}>
-            {weighted}/{ET.MAX_W} pts · {ET.MAX_W-weighted} remaining
+            {weighted}/{T.MAX_W} pts · {T.MAX_W-weighted} remaining
           </span>
         </div>
       )}
@@ -860,11 +817,11 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
       )}
 
       {/* Final warning */}
-      {weighted >= ET.MAX_W-4 && weighted < ET.MAX_W && (
+      {weighted >= T.MAX_W-4 && weighted < T.MAX_W && (
         <div style={{ position:'fixed',bottom:log.length>0?216:12,left:12,zIndex:9990,
           background:'#7F1D1D',border:'1px solid #EF4444',borderRadius:10,
           padding:'10px 14px',color:'#FCA5A5',fontSize:12,fontWeight:600,maxWidth:220 }}>
-          ⛔ {ET.MAX_W-weighted} pts until auto-termination
+          ⛔ {T.MAX_W-weighted} pts until auto-termination
         </div>
       )}
 

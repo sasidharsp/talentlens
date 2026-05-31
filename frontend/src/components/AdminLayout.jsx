@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase, BarChart2, Award, Activity, Shield
+  LogOut, Zap, Briefcase, BarChart2, Award, Activity
 } from 'lucide-react';
 
 const allNavItems = [
@@ -15,7 +15,6 @@ const allNavItems = [
   { to: '/admin/questions', label: 'Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
   { to: '/admin/r2/questions', label: 'R2 Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
   { to: '/admin/settings', label: 'Settings', icon: Settings, roles: ['admin','super_admin'] },
-  { to: '/admin/proctoring', label: 'Proctoring', icon: Shield, roles: ['admin','super_admin'] },
 ];
 
 export default function AdminLayout() {

@@ -361,46 +361,7 @@ class Round2Evaluation(Base):
     session = relationship("Round2Session")
 
 
-class ProctoringConfig(Base):
-    """Single-row table — global proctoring settings editable by admin."""
-    __tablename__ = "proctoring_config"
-    id           = Column(Integer, primary_key=True)
-    enabled      = Column(Boolean, default=True)
-    # Termination
-    max_weight   = Column(Integer, default=60)
-    grace_frames = Column(Integer, default=12)
-    cooldown_ms  = Column(Integer, default=15000)
-    # Audio
-    audio_rms    = Column(Float,   default=72.0)
-    audio_hold_ms= Column(Integer, default=9000)
-    # Phone
-    phone_confidence = Column(Float, default=0.65)
-    phone_frames     = Column(Integer, default=5)
-    phone_term_count = Column(Integer, default=3)
-    # Gaze
-    gaze_h       = Column(Float, default=0.20)
-    gaze_v_up    = Column(Float, default=0.14)
-    gaze_v_down  = Column(Float, default=0.24)
-    head_thresh  = Column(Float, default=0.16)
-    # Violation weights (JSON)
-    violation_weights = Column(JSON, default={
-        "phone_detected":    5,
-        "multiple_faces":    4,
-        "devtools_open":     4,
-        "copy_attempt":      3,
-        "paste_attempt":     3,
-        "tab_switch":        3,
-        "keyboard_shortcut": 2,
-        "fullscreen_exit":   2,
-        "face_not_detected": 1,
-        "audio_detected":    0,
-        "gaze_away":         0,
-        "head_turn":         0,
-        "eyes_closed":       0,
-        "window_blur":       0,
-    })
-    updated_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+# ─────────────────────────── AUDIT LOG ───────────────────────────
 class AuditLog(Base):
     __tablename__ = "audit_log"
     id = Column(Integer, primary_key=True, index=True)
