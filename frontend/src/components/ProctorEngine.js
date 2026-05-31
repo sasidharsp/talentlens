@@ -117,8 +117,8 @@ export class ProctorEngine {
     const objects = await objectsPromise;
 
     // Debug — uncomment to see what's detected:
-    const allDetected = objects.map(o => `${o.class}:${o.score.toFixed(2)}`).join(', ');
-    if (allDetected) console.log('[COCO-SSD]', allDetected);
+    // const allDetected = objects.map(o => `${o.class}:${o.score.toFixed(2)}`).join(', ');
+    // if (allDetected) console.log('[COCO-SSD]', allDetected);
 
     this._processPhone(objects);
     this._processFace(faceResults);

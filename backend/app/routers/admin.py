@@ -1125,3 +1125,81 @@ def get_snapshots(
         "flag_reason": s.flag_reason,
         "analysis": s.analysis,
     } for s in snaps]
+
+# ─────────────────────────── LIVE MONITOR ───────────────────────────
+@router.get("/live-sessions")
+def get_live_sessions(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    """Real-time view of all active assessment sessions for live monitor."""
+    sessions = db.query(models.AssessmentSession).filter(
+        models.AssessmentSession.status.in_(["IN_PROGRESS", "REGISTERED"])
+    ).order_by(models.AssessmentSession.id.desc()).all()
+
+    items = []
+    for session in sessions:
+        candidate = session.candidate
+
+        latest_event = db.query(models.ProctorEvent).filter_by(
+            session_id=session.id
+        ).order_by(models.ProctorEvent.timestamp.desc()).first()
+
+        latest_snap = db.query(models.ProctorSnapshot).filter_by(
+            session_id=session.id
+        ).order_by(models.ProctorSnapshot.captured_at.desc()).first()
+
+        thumbnail = None
+        if latest_snap and latest_snap.thumbnail_b64:
+            thumbnail = f"data:image/jpeg;base64,{latest_snap.thumbnail_b64}"
+
+        items.append({
+            "session_id": session.id,
+            "candidate_id": candidate.id,
+            "full_name": candidate.full_name,
+            "reference_code": candidate.reference_code,
+            "role": candidate.requisition.title if candidate.requisition else "—",
+            "status": session.status,
+            "current_segment": session.current_segment,
+            "proctoring_status": session.proctoring_status or "active",
+            "integrity_score": int(session.integrity_score) if session.integrity_score else 100,
+            "violation_count": session.violation_count or 0,
+            "termination_reason": session.termination_reason,
+            "started_at": session.instructions_accepted_at or session.created_at,
+            "last_event_type": latest_event.event_type if latest_event else None,
+            "last_event_at": latest_event.timestamp if latest_event else None,
+            "latest_thumbnail": thumbnail,
+            "snapshot_count": db.query(models.ProctorSnapshot).filter_by(session_id=session.id).count(),
+        })
+
+    return {"sessions": items, "count": len(items)}
+
+
+@router.post("/candidates/{session_id}/terminate")
+def admin_terminate_session(
+    session_id: int,
+    payload: dict = {},
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Admin manually terminates a live candidate session."""
+    session = db.query(models.AssessmentSession).filter_by(id=session_id).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.status == "SUBMITTED":
+        raise HTTPException(400, "Session already submitted.")
+
+    reason = payload.get("reason", "Terminated by admin")
+    session.proctoring_status = "terminated"
+    session.status = "SUBMITTED"
+    session.submitted_at = datetime.utcnow()
+    session.termination_reason = f"Admin terminated: {reason} (by {current_user.email})"
+    session.integrity_score = max(0, (session.integrity_score or 100) - 30)
+
+    db.add(models.ProctorEvent(
+        session_id=session.id,
+        event_type="admin_terminated",
+        details=f"Manually terminated by {current_user.email}. Reason: {reason}",
+    ))
+    db.commit()
+    return {"terminated": True, "session_id": session_id}

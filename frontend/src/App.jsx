@@ -21,6 +21,7 @@ import CandidateDetail from './pages/admin/CandidateDetail'
 import QuestionBank from './pages/admin/QuestionBank'
 import Round2Questions from './pages/admin/Round2Questions'
 import Round2Candidates from './pages/admin/Round2Candidates'
+import LiveMonitor from './pages/admin/LiveMonitor'
 import Requisitions from './pages/admin/Requisitions'
 import Analytics from './pages/admin/Analytics'
 import Settings from './pages/admin/Settings'
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/admin/login" element={<Login />} />
           <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="live" element={<LiveMonitor />} />
             <Route path="candidates" element={<CandidateList />} />
             <Route path="candidates/:sessionId" element={<CandidateDetail />} />
             <Route path="r2/candidates" element={<Round2Candidates />} />

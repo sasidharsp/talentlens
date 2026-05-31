@@ -1,87 +1,81 @@
-import { useState, useRef, useEffect } from 'react';
-import { Camera, CheckCircle, RefreshCw, VideoOff, SwitchCamera } from 'lucide-react';
-
-// Keywords that identify built-in cameras
-const BUILTIN_KEYWORDS = ['facetime', 'integrated', 'built-in', 'internal', 'built in'];
-
-const isBuiltIn = label =>
-  BUILTIN_KEYWORDS.some(kw => label.toLowerCase().includes(kw));
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Camera, CheckCircle, RefreshCw, VideoOff } from 'lucide-react';
 
 export default function WebcamCapture({ onCapture, onSkip }) {
-  const videoRef  = useRef(null);
-  const canvasRef = useRef(null);
-  const [stream,    setStream]    = useState(null);
-  const [ready,     setReady]     = useState(false);
-  const [captured,  setCaptured]  = useState(null);
-  const [error,     setError]     = useState('');
-  const [cameras,   setCameras]   = useState([]);   // all available cameras
-  const [activeId,  setActiveId]  = useState(null); // currently selected deviceId
+  const videoRef   = useRef(null);
+  const canvasRef  = useRef(null);
+  const streamRef  = useRef(null);
+  const [ready,    setReady]    = useState(false);
+  const [captured, setCaptured] = useState(null);
+  const [error,    setError]    = useState('');
 
-  // Step 1 — enumerate cameras, pick best, get stream
   useEffect(() => {
-    let active = true;
+    let cancelled = false;
 
-    const init = async () => {
-      try {
-        // Need permission first before labels are available
-        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        probe.getTracks().forEach(t => t.stop());
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      .then(stream => {
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
 
-        const all = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = all.filter(d => d.kind === 'videoinput');
-        if (!active) return;
-        setCameras(videoDevices);
+        const video = videoRef.current;
+        if (!video) return;
 
-        // Prefer external camera; fall back to first available
-        const preferred =
-          videoDevices.find(d => !isBuiltIn(d.label)) || videoDevices[0];
+        // Chrome requires these set imperatively — React props are ignored for muted
+        video.muted    = true;
+        video.volume   = 0;
+        video.setAttribute('muted', '');
 
-        if (!preferred) throw new Error('No camera found');
-        setActiveId(preferred.deviceId);
+        video.srcObject = stream;
+        // No explicit play() here — the autoPlay attribute on the element
+        // triggers loading in Chrome, which then fires onLoadedMetadata reliably
+      })
+      .catch(err => {
+        if (cancelled) return;
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('Camera access was denied. Please click the camera icon in your browser address bar and allow access, then refresh.');
+        } else if (err.name === 'NotFoundError') {
+          setError('No camera found. Please connect a camera and refresh.');
+        } else {
+          setError(`Could not start camera (${err.name}). Please refresh and try again.`);
+        }
+      });
 
-        const s = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: preferred.deviceId } },
-          audio: false,
-        });
-        if (active) setStream(s);
-      } catch {
-        if (active) setError('Camera access denied or unavailable.');
-      }
-    };
-
-    init();
-    return () => { active = false; };
-  }, []);
-
-  // Step 2 — attach stream to video element (always in DOM)
-  useEffect(() => {
-    if (!stream) return;
-    const video = videoRef.current;
-    if (video) {
-      setReady(false);
-      video.srcObject = stream;
+    // Safety fallback — if onLoadedMetadata never fires (rare edge case)
+    const fallback = setTimeout(() => {
+      if (cancelled || ready) return;
+      const video = videoRef.current;
+      if (!video) return;
+      video.muted = true;
       video.play()
         .then(() => setReady(true))
-        .catch(() => setReady(true));
-    }
-    return () => { stream.getTracks().forEach(t => t.stop()); };
-  }, [stream]);
+        .catch(() => {
+          // play() failed — stream may not have loaded yet; try once more
+          setTimeout(() => {
+            if (!cancelled) {
+              video.play().catch(() => {});
+              setReady(true);
+            }
+          }, 1000);
+        });
+    }, 4000);
 
-  // Switch to a different camera
-  const switchTo = async (deviceId) => {
-    if (deviceId === activeId) return;
-    try {
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } },
-        audio: false,
-      });
-      setActiveId(deviceId);
-      setStream(s);
-    } catch {
-      setError('Could not switch camera.');
-    }
-  };
+    return () => {
+      cancelled = true;
+      clearTimeout(fallback);
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    };
+  }, []);
+
+  // Fires reliably in Chrome once autoPlay is set on the element
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = true;
+    video.play()
+      .then(() => setReady(true))
+      .catch(() => setReady(true));
+  }, []);
 
   const capture = () => {
     const video  = videoRef.current;
@@ -101,73 +95,75 @@ export default function WebcamCapture({ onCapture, onSkip }) {
   const retake = () => {
     setCaptured(null);
     onCapture(null, null);
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
+    const video = videoRef.current;
+    if (video && streamRef.current) {
+      video.muted = true;
+      video.srcObject = streamRef.current;
+      video.play().catch(() => {});
     }
   };
 
   if (error) return (
-    <div style={{ textAlign:'center', padding:16 }}>
-      <VideoOff size={28} color="var(--text-3)" style={{ marginBottom:8 }} />
-      <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:12 }}>{error}</p>
+    <div style={{ textAlign: 'center', padding: 16 }}>
+      <VideoOff size={28} color="var(--text-3)" style={{ marginBottom: 8 }} />
+      <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>{error}</p>
       {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip photo</button>}
     </div>
   );
 
-  if (captured) return (
-    <div style={{ textAlign:'center' }}>
-      <img src={captured} alt="Captured"
-        style={{ width:200, height:150, objectFit:'cover', borderRadius:10,
-          border:'2px solid var(--success)', display:'block', margin:'0 auto 12px' }} />
-      <div style={{ display:'flex', gap:8, justifyContent:'center', alignItems:'center' }}>
-        <CheckCircle size={16} color="var(--success)" />
-        <span style={{ fontSize:13, color:'var(--success)', fontWeight:600 }}>Photo captured</span>
-        <button className="btn btn-ghost btn-sm" onClick={retake}><RefreshCw size={13}/> Retake</button>
-      </div>
-    </div>
-  );
-
   return (
-    <div style={{ textAlign:'center' }}>
-      <canvas ref={canvasRef} style={{ display:'none' }} />
+    <div style={{ textAlign: 'center' }}>
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      <div style={{ position:'relative', display:'inline-block', marginBottom:12 }}>
-        {/* Video always in DOM — guarantees ref is set when stream arrives */}
-        <video ref={videoRef} autoPlay muted playsInline
-          style={{ width:280, height:210, objectFit:'cover', borderRadius:10,
-            border:'2px solid var(--border)', display:'block',
-            transform:'scaleX(-1)', background:'#1a1a1a' }} />
-        {!ready && (
-          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
-            alignItems:'center', justifyContent:'center',
-            background:'rgba(0,0,0,0.75)', borderRadius:10, gap:10 }}>
-            <div className="spinner" style={{ borderTopColor:'#fff' }} />
-            <span style={{ fontSize:12, color:'#ccc' }}>Starting camera…</span>
+      {captured && (
+        <div style={{ marginBottom: 12 }}>
+          <img
+            src={captured}
+            alt="Captured"
+            style={{
+              width: 200, height: 150, objectFit: 'cover', borderRadius: 10,
+              border: '2px solid var(--success)', display: 'block', margin: '0 auto 12px',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
+            <CheckCircle size={16} color="var(--success)" />
+            <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>Photo captured</span>
+            <button className="btn btn-ghost btn-sm" onClick={retake}><RefreshCw size={13} /> Retake</button>
           </div>
-        )}
-      </div>
-
-      {/* Camera selector — only shown when multiple cameras detected */}
-      {cameras.length > 1 && (
-        <div style={{ marginBottom:10, display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
-          {cameras.map(cam => (
-            <button key={cam.deviceId}
-              onClick={() => switchTo(cam.deviceId)}
-              className={`btn btn-sm ${cam.deviceId === activeId ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize:11, padding:'4px 10px', display:'flex', alignItems:'center', gap:5 }}>
-              <SwitchCamera size={12} />
-              {cam.label || `Camera ${cameras.indexOf(cam) + 1}`}
-            </button>
-          ))}
         </div>
       )}
 
-      <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
-        <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
-          <Camera size={14}/> Take Photo
-        </button>
-        {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>}
+      <div style={{ display: captured ? 'none' : 'block' }}>
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            onLoadedMetadata={handleLoadedMetadata}
+            style={{
+              width: 280, height: 210, objectFit: 'cover', borderRadius: 10,
+              border: '2px solid var(--border)', display: 'block',
+              transform: 'scaleX(-1)', background: '#1a1a1a',
+            }}
+          />
+          {!ready && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.75)', borderRadius: 10, gap: 10,
+            }}>
+              <div className="spinner" style={{ borderTopColor: '#fff' }} />
+              <span style={{ fontSize: 12, color: '#ccc' }}>Starting camera…</span>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <button className="btn btn-primary btn-sm" onClick={capture} disabled={!ready}>
+            <Camera size={14} /> Take Photo
+          </button>
+          {onSkip && <button className="btn btn-ghost btn-sm" onClick={onSkip}>Skip</button>}
+        </div>
       </div>
     </div>
   );
