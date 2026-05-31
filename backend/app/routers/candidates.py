@@ -730,3 +730,28 @@ async def submit_proctor_snapshot(
 
     db.commit()
     return {"action": action, "flag_reason": flag_reason}
+# ─── PROCTORING CONFIG (public — no auth needed) ───
+@router.get("/proctor-config")
+def get_proctor_config(db: Session = Depends(get_db)):
+    """Returns proctoring settings for candidate-side enforcement."""
+    from app import models as m
+    cfg = db.query(m.ProctoringConfig).first()
+    if not cfg:
+        cfg = m.ProctoringConfig()
+        db.add(cfg); db.commit(); db.refresh(cfg)
+    return {
+        "enabled": cfg.enabled,
+        "max_weight": cfg.max_weight,
+        "grace_frames": cfg.grace_frames,
+        "cooldown_ms": cfg.cooldown_ms,
+        "audio_rms": cfg.audio_rms,
+        "audio_hold_ms": cfg.audio_hold_ms,
+        "phone_confidence": cfg.phone_confidence,
+        "phone_frames": cfg.phone_frames,
+        "phone_term_count": cfg.phone_term_count,
+        "gaze_h": cfg.gaze_h,
+        "gaze_v_up": cfg.gaze_v_up,
+        "gaze_v_down": cfg.gaze_v_down,
+        "head_thresh": cfg.head_thresh,
+        "violation_weights": cfg.violation_weights or {},
+    }
