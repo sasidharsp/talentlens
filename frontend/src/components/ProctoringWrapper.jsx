@@ -72,7 +72,7 @@ const T = {
   AUDIO_HOLD:9000,   // 9 seconds sustained before flagging
   GRACE:     12,     // ~1.2s at 10fps before violation counts
   COOLDOWN:  15000,  // 15s before same event fires again
-  SNAP_MS:   90000,  // evidence snapshot every 90s
+  SNAP_MS:   25000,  // evidence snapshot every 10s for admin audit
   MAX_W:     60,     // raised — much harder to auto-terminate
   DEVTOOLS:  160,
 };
@@ -186,11 +186,14 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
     }).catch(() => {});
 
     if (w > 0) {
-      setLog(p => [{ type, label: meta?.lbl ?? type, color: meta?.c ?? '#EF4444',
-        time: new Date().toLocaleTimeString() }, ...p].slice(0, 10));
+      setWeighted(weightedRef.current);
       setWarning({ type, ...meta });
       setTimeout(() => setWarning(cur => cur?.type === type ? null : cur), 5000);
     }
+
+    // Always add to log — w:0 events show as "logged" with no score impact
+    setLog(p => [{ type, label: meta?.lbl ?? type, color: meta?.c ?? '#EF4444',
+      time: new Date().toLocaleTimeString(), w }, ...p].slice(0, 20));
 
     if (weightedRef.current >= T.MAX_W && onTerminate) {
       api.post(`/candidate/terminate/${token}`, {
@@ -532,7 +535,14 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
   useEffect(() => {
     const doSnap = () => {
       const snap = captureFrame(0.85);
-      if (snap) logViol('evidence_snapshot', { thumbnail: snap }); api.post(`/candidate/proctor-snapshot/${token}`, { image_data: snap.split(',')[1], flag_reason: null, is_violation: false }).catch(() => {});
+      if (snap) {
+        logViol('evidence_snapshot', { thumbnail: snap });
+        api.post(`/candidate/proctor-snapshot/${token}`, {
+          image_data: snap.split(',')[1],
+          flag_reason: null,
+          is_violation: false,
+        }).catch(() => {});
+      }
     };
     const initTimer  = setTimeout(doSnap, 15000);          // first at 15 s
     const snapTimer  = setInterval(doSnap, T.SNAP_MS);     // then every 90 s
@@ -620,22 +630,6 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
               opacity: mpReady ? 0.6 : 0, transition:'opacity 0.5s', pointerEvents:'none' }}
             title="Eye tracker" />
 
-          {/* Camera switcher */}
-          {cameras.length > 1 && (
-            <div style={{ position:'absolute', bottom:6, left:0, right:0,
-              display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap', padding:'0 6px' }}>
-              {cameras.map(cam => (
-                <button key={cam.deviceId} onClick={() => setActiveCamId(cam.deviceId)}
-                  style={{ padding:'2px 7px', fontSize:9, borderRadius:4, cursor:'pointer',
-                    border:`1px solid ${cam.deviceId === activeCamId ? statusColor : '#334155'}`,
-                    background: cam.deviceId === activeCamId ? `${statusColor}33` : 'rgba(0,0,0,0.7)',
-                    color:'#fff' }} title={cam.label}>
-                  {isBuiltin(cam.label) ? '💻' : '📷'} {cam.label?.split('(')[0].trim().slice(0,8) || 'Cam'}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Score bar under webcam */}
           {weighted > 0 && (
             <div style={{ position:'absolute', bottom:0, left:0, right:0, height:3,
@@ -648,15 +642,14 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
 
         {/* Violation log — scrollable */}
         <div style={{ flex:1, overflow:'auto', display:'flex', flexDirection:'column' }}>
-          {/* Log header */}
+          {/* Log header with live score counter */}
           <div style={{ padding:'8px 12px', borderBottom:'1px solid #1E293B',
             display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
             <span style={{ fontSize:11, color:'#64748B', fontWeight:600 }}>INTEGRITY LOG</span>
-            {weighted >= T.MAX_W - 8 && weighted < T.MAX_W && (
-              <span style={{ fontSize:10, color:'#EF4444', fontWeight:700 }}>
-                ⛔ {T.MAX_W - weighted}pts left
-              </span>
-            )}
+            <span style={{ fontSize:11, fontWeight:700,
+              color: weighted === 0 ? '#10B981' : weighted < T.MAX_W * 0.6 ? '#F59E0B' : '#EF4444' }}>
+              {weighted}/{T.MAX_W} pts
+            </span>
           </div>
 
           {log.length === 0 ? (
@@ -676,11 +669,10 @@ export default function ProctoringWrapper({ token, children, onTerminate }) {
                       textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.label}</div>
                     <div style={{ color:'#475569', fontSize:9, marginTop:2 }}>{e.time}</div>
                   </div>
-                  {VIOLS[e.type]?.w > 0 && (
-                    <span style={{ fontSize:10, color:e.color, fontWeight:700, flexShrink:0 }}>
-                      +{VIOLS[e.type].w}
-                    </span>
-                  )}
+                  <span style={{ fontSize:10, fontWeight:700, flexShrink:0,
+                    color: e.w > 0 ? e.color : '#475569' }}>
+                    {e.w > 0 ? `+${e.w}` : 'log'}
+                  </span>
                 </div>
               ))}
             </div>
