@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+import io
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
@@ -75,3 +80,132 @@ def add_question(
     )
     db.add(q); db.commit(); db.refresh(q)
     return {"id": q.id, "question": q.question, "answer": q.answer, "tag": q.tag}
+
+
+@router.get("/template")
+def download_template(current_user=Depends(require_any_staff)):
+    """Download Excel template for bulk importing in-person interview questions."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Questions"
+
+    # Styles
+    HDR_FONT  = Font(bold=True, color="FFFFFF", size=11)
+    HDR_FILL  = PatternFill("solid", fgColor="312E81")
+    HDR_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    SMP_FILL  = PatternFill("solid", fgColor="EEF2FF")
+    border    = Border(
+        left=Side(style="thin", color="D1D5DB"),
+        right=Side(style="thin", color="D1D5DB"),
+        top=Side(style="thin", color="D1D5DB"),
+        bottom=Side(style="thin", color="D1D5DB"),
+    )
+
+    headers = ["tag", "question", "answer"]
+    col_widths = [20, 60, 70]
+    for i, (h, w) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(1, i, h)
+        cell.font    = HDR_FONT
+        cell.fill    = HDR_FILL
+        cell.alignment = HDR_ALIGN
+        cell.border  = border
+        ws.column_dimensions[cell.column_letter].width = w
+
+    # Sample rows
+    samples = [
+        ["Leadership", "Tell me about a time you led a team through a difficult change.", "Look for: clear ownership, empathy, structured approach, measurable outcome."],
+        ["Technical",  "How would you design a high-availability system for a banking application?", "Key points: redundancy, failover, DR strategy, RPO/RTO, compliance."],
+        ["Behavioural","Describe a situation where you had to influence without authority.", "Look for: stakeholder mapping, communication style, outcome achieved."],
+    ]
+    for r, row in enumerate(samples, 2):
+        for c, val in enumerate(row, 1):
+            cell = ws.cell(r, c, val)
+            cell.fill      = SMP_FILL
+            cell.font      = Font(size=10, italic=True, color="374151")
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            cell.border    = border
+        ws.row_dimensions[r].height = 40
+
+    ws.row_dimensions[1].height = 22
+
+    # Instructions sheet
+    ws2 = wb.create_sheet("Instructions")
+    ws2.column_dimensions["A"].width = 90
+    ws2.cell(1, 1, "TalentLens — In-person Interview Question Import").font = Font(bold=True, size=14, color="312E81")
+    for i, line in enumerate([
+        "• Column 'tag'      — Topic tag (e.g. Leadership, Technical, Behavioural). Required.",
+        "• Column 'question' — The interview question to ask. Required.",
+        "• Column 'answer'   — Expected answer or key points the interviewer should look for. Required.",
+        "• Delete the sample rows (rows 2–4) before uploading your real questions.",
+        "• Do NOT rename the column headers.",
+        "• Save as .xlsx before uploading.",
+    ], 3):
+        c = ws2.cell(i, 1, line)
+        c.font = Font(size=11, color="1F2937")
+        c.alignment = Alignment(wrap_text=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=inperson_questions_template.xlsx"},
+    )
+
+
+@router.post("/import")
+async def import_questions(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_any_staff),
+):
+    """Bulk import in-person interview questions from Excel or CSV."""
+    filename = (file.filename or "").lower()
+    content  = await file.read()
+
+    if not content:
+        raise HTTPException(400, "Uploaded file is empty.")
+
+    try:
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        elif filename.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(400, "Please upload a .xlsx or .csv file.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Could not read file: {e}")
+
+    if df.empty:
+        raise HTTPException(400, "File has no data rows.")
+
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    df.dropna(how="all", inplace=True)
+
+    created, errors = 0, []
+    for idx, row in df.iterrows():
+        rv     = row.where(pd.notna(row), None).to_dict()
+        _s     = lambda k: str(rv[k]).strip() if rv.get(k) not in (None, "") else ""
+        tag    = _s("tag")
+        question = _s("question")
+        answer = _s("answer")
+
+        if not tag or not question or not answer:
+            errors.append({"row": idx + 2, "error": "tag, question and answer are all required."})
+            continue
+
+        db.add(models.InPersonQuestion(
+            tag=tag, question=question, answer=answer,
+            created_by=current_user.id,
+        ))
+        created += 1
+
+    db.commit()
+    return {
+        "imported": created,
+        "errors":   errors,
+        "message":  f"{created} question(s) imported successfully.",
+    }

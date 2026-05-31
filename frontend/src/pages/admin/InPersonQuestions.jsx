@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Tag, Plus, ChevronDown, ChevronUp, X, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Tag, Plus, ChevronDown, ChevronUp, Upload, Download } from 'lucide-react';
 import api from '../../api/client';
 
 export default function InPersonQuestions() {
@@ -10,8 +10,11 @@ export default function InPersonQuestions() {
   const [showAdd,   setShowAdd]   = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   const [form, setForm] = useState({ question:'', answer:'', tag:'', newTag:'' });
   const [error, setError] = useState('');
+  const fileRef = useRef();
 
   const loadTags = () =>
     api.get('/inperson/tags').then(r => setTags(r.data)).catch(() => {});
@@ -21,6 +24,31 @@ export default function InPersonQuestions() {
        .then(r => setQuestions(r.data)).catch(() => {});
 
   useEffect(() => { loadTags(); loadQuestions(); }, []);
+
+  const downloadTemplate = () => {
+    window.open(`${import.meta.env.VITE_API_URL || ''}/api/inperson/template`, '_blank');
+  };
+
+  const doImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true); setImportResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await api.post('/inperson/import', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImportResult(r.data);
+      await loadTags();
+      await loadQuestions(activeTag);
+    } catch (e) {
+      setImportResult({ error: e.response?.data?.detail || 'Import failed.' });
+    } finally {
+      setImporting(false);
+      e.target.value = '';
+    }
+  };
 
   const handleTag = (tag) => {
     const next = activeTag === tag ? null : tag;
@@ -71,14 +99,45 @@ export default function InPersonQuestions() {
             {activeTag ? ` in "${activeTag}"` : ' across all tags'}
           </div>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(s => !s); setError(''); }}>
-          <Plus size={14} /> Add Question
-        </button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={downloadTemplate}>
+            <Download size={14} /> Download Template
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv"
+            style={{ display:'none' }} onChange={doImport} />
+          <button className="btn btn-secondary btn-sm"
+            onClick={() => fileRef.current.click()} disabled={importing}>
+            <Upload size={14} /> {importing ? 'Importing…' : 'Import Excel'}
+          </button>
+          <button className="btn btn-primary btn-sm"
+            onClick={() => { setShowAdd(s => !s); setError(''); }}>
+            <Plus size={14} /> Add Question
+          </button>
+        </div>
       </div>
 
       <div className="admin-content page-fade">
 
-        {/* Tag chips */}
+        {/* Import result */}
+        {importResult && (
+          <div style={{
+            marginBottom:16, padding:'12px 16px', borderRadius:8, fontSize:13,
+            background: importResult.error ? 'var(--danger-light)' : 'var(--success-light)',
+            border: `1px solid ${importResult.error ? 'var(--danger-border)' : 'var(--success-border)'}`,
+            color: importResult.error ? 'var(--danger)' : 'var(--success)',
+          }}>
+            {importResult.error || importResult.message}
+            {importResult.errors?.length > 0 && (
+              <div style={{ marginTop:6, fontSize:12, opacity:0.8 }}>
+                {importResult.errors.slice(0,3).map((e,i) =>
+                  <div key={i}>Row {e.row}: {e.error}</div>
+                )}
+                {importResult.errors.length > 3 &&
+                  <div>…and {importResult.errors.length - 3} more</div>}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ marginBottom:24 }}>
           <div style={{ fontSize:11, fontWeight:600, color:'var(--text-3)',
             textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>
@@ -145,7 +204,7 @@ export default function InPersonQuestions() {
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={saving}>
-                  {saved ? <><Check size={13} /> Saved</> : saving ? 'Saving…' : <><Plus size={13} /> Save Question</>}
+                  {saved ? '✓ Saved' : saving ? 'Saving…' : <><Plus size={13} /> Save Question</>}
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(false)}>Cancel</button>
               </div>
