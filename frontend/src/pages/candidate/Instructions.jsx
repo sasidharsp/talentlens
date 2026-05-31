@@ -102,7 +102,6 @@ export default function Instructions() {
           {/* Custom instructions from admin */}
           {data.instructions && data.instructions !== 'Please complete all three segments carefully.' && (
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Additional Instructions</div>
               <div
                 className="instruction-content"
                 style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.8 }}
