@@ -9,7 +9,7 @@ from app.database import get_db
 from app import models
 from app.auth import require_any_staff
 
-router = APIRouter(prefix="/inperson", tags=["inperson"])
+router = APIRouter(prefix="/api/inperson", tags=["inperson"])
 
 
 @router.get("/tags")
