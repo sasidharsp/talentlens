@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../../api/client';
 import { downloadFile } from '../../api/download';
+import Round2Questions from './Round2Questions';
 import {
   Plus, Upload, Download, Trash2, BookOpen,
   FileSpreadsheet, AlertTriangle, CheckCircle2,
@@ -343,14 +344,8 @@ export default function QuestionBank() {
           </button>
         </div>
 
-        {/* Round 2 iframe/redirect */}
-        {seg === 'r2' && (
-          <iframe
-            src="/admin/r2/questions"
-            style={{ width:'100%', height:'calc(100vh - 200px)', border:'none', borderRadius:8 }}
-            title="Round 2 Question Bank"
-          />
-        )}
+        {/* Round 2 inline */}
+        {seg === 'r2' && <Round2Questions />}
 
         {/* Import result */}
         <ImportResult result={importResult} onClose={() => setImportResult(null)} />

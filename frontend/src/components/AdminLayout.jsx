@@ -10,7 +10,6 @@ const allNavItems = [
   { to: '/admin/live', label: 'Live Monitor', icon: Activity, roles: ['admin','super_admin'] },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart2, roles: ['admin','super_admin'] },
   { to: '/admin/candidates', label: 'Candidates', icon: Users, roles: ['admin','super_admin','interviewer'] },
-  { to: '/admin/r2/candidates', label: 'Round 2', icon: Award, roles: ['admin','super_admin','interviewer'] },
   { to: '/admin/requisitions', label: 'Requisitions', icon: Briefcase, roles: ['admin','super_admin'] },
   { to: '/admin/questions', label: 'Question Bank', icon: BookOpen, roles: ['admin','super_admin','qadmin'] },
   { to: '/admin/settings', label: 'Settings', icon: Settings, roles: ['admin','super_admin'] },

@@ -57,7 +57,7 @@ def dashboard_stats(
 @router.get("/candidates")
 def list_candidates(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=10000),
     status: Optional[str] = None,
     role_id: Optional[int] = None,
     final_status: Optional[str] = None,

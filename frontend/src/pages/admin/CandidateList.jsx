@@ -36,6 +36,20 @@ export default function CandidateList() {
   const [importResult, setImportResult] = useState(null);
   const fileRef = useRef();
 
+  const [exporting, setExporting] = useState(false);
+
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ page: 1, page_size: 10000 });
+      if (search)   params.set('search', search);
+      if (status)   params.set('status', status);
+      if (decision) params.set('final_status', decision);
+      const r = await api.get(`/admin/candidates?${params}`);
+      exportCSV(r.data.items);
+    } finally { setExporting(false); }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -86,8 +100,8 @@ export default function CandidateList() {
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current.click()}>
             <Upload size={14} /> Bulk Import
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => exportCSV(data.items)}>
-            <Download size={14} /> Export CSV
+          <button className="btn btn-secondary btn-sm" onClick={exportAll} disabled={exporting}>
+            <Download size={14} /> {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
         </div>
       </div>
