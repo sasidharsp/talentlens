@@ -103,6 +103,13 @@ def seed_defaults():
             "ALTER TABLE proctoring_config ADD COLUMN IF NOT EXISTS snap_ms INTEGER DEFAULT 10000",
             "ALTER TABLE proctoring_config ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE",
             "ALTER TABLE proctoring_config ADD COLUMN IF NOT EXISTS violation_weights JSONB DEFAULT '{}'::jsonb",
+            """CREATE TABLE IF NOT EXISTS site_content (
+                id SERIAL PRIMARY KEY,
+                key VARCHAR(100) UNIQUE NOT NULL,
+                content JSONB DEFAULT '{}'::jsonb,
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_by INTEGER REFERENCES users(id)
+            )""",
         ]
         for sql in migrations:
             try:

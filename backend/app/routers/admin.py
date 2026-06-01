@@ -1296,3 +1296,40 @@ def change_own_password(
     current_user.hashed_password = get_password_hash(new_pw)
     db.commit()
     return {"message": "Password changed successfully."}
+
+
+# ═══════════════════════════════════════════════════════
+#  SITE CONTENT — editable page content (About + Architecture)
+# ═══════════════════════════════════════════════════════
+
+@router.get("/site-content/{key}")
+def get_site_content(
+    key: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    row = db.query(models.SiteContent).filter_by(key=key).first()
+    if not row:
+        return {"key": key, "content": {}, "updated_at": None}
+    return {"key": row.key, "content": row.content, "updated_at": row.updated_at}
+
+
+@router.put("/site-content/{key}")
+def save_site_content(
+    key: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    row = db.query(models.SiteContent).filter_by(key=key).first()
+    if row:
+        row.content    = payload.get("content", {})
+        row.updated_by = current_user.id
+    else:
+        row = models.SiteContent(
+            key=key, content=payload.get("content", {}),
+            updated_by=current_user.id,
+        )
+        db.add(row)
+    db.commit(); db.refresh(row)
+    return {"key": row.key, "content": row.content, "updated_at": row.updated_at}

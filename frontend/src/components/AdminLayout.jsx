@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, BookOpen, Settings, UserCog,
-  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home, Shield, KeyRound, Info,
+  LogOut, Zap, Briefcase, BarChart2, Activity, MessageSquare, Home, Shield, KeyRound, Info, Layers,
 } from 'lucide-react';
 import api from '../api/client';
 
@@ -82,7 +82,8 @@ function ChangePasswordModal({ onClose }) {
 }
 
 const allNavItems = [
-  { to: '/admin/about',     label: 'About',              icon: Info,            exact: true, roles: ['admin','super_admin','interviewer','qadmin'] },
+  { to: '/admin/about',       label: 'About',              icon: Info,            exact: true, roles: ['admin','super_admin','interviewer','qadmin'] },
+  { to: '/admin/architecture',label: 'Architecture',        icon: Layers,          exact: true, roles: ['admin','super_admin'] },
   { to: '/admin/home',      label: 'Home',               icon: Home,            exact: true, roles: ['admin','super_admin'] },
   { to: '/admin',           label: 'Dashboard',          icon: LayoutDashboard, exact: true, roles: ['admin','super_admin'] },
   { to: '/admin/live',      label: 'Live Monitor',        icon: Activity,        roles: ['admin','super_admin'] },
