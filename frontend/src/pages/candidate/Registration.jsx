@@ -7,8 +7,7 @@ import { Zap, Camera, CheckCircle } from 'lucide-react';
 export default function Registration() {
   const [requisitions, setRequisitions] = useState([]);
   const [form, setForm] = useState({
-    full_name:'', email:'', mobile:'', requisition_id:'', years_of_experience:'',
-    current_organization:''
+    full_name:'', email:'', mobile:'', requisition_id:'', years_of_experience:''
   });
   const [webcamPhoto, setWebcamPhoto] = useState(null);
   const [showWebcam, setShowWebcam] = useState(false);
@@ -50,17 +49,17 @@ export default function Registration() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Zap size={16} color="#fff" />
+      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Zap size={13} color="#fff" />
         </div>
-        <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: 'var(--text)' }}>TalentLens</span>
+        <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: 'var(--text)' }}>TalentLens</span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 24px 60px' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '14px 24px 24px' }}>
         <div style={{ width: '100%', maxWidth: 600 }}>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 32, fontWeight: 400, color: 'var(--text)', marginBottom: 8 }}>
+          <div style={{ textAlign: 'center', marginBottom: 10 }}>
+            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, fontWeight: 400, color: 'var(--text)', marginBottom: 8 }}>
               Candidate Registration
             </h1>
             <p style={{ fontSize: 15, color: 'var(--text-2)', lineHeight: 1.6 }}>
@@ -68,7 +67,7 @@ export default function Registration() {
             </p>
           </div>
 
-          <div className="portal-card" style={{ padding: 32 }}>
+          <div className="portal-card" style={{ padding: '16px 20px' }}>
             {error && (
               <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)', marginBottom: 20 }}>
                 {error}
@@ -76,7 +75,7 @@ export default function Registration() {
             )}
 
             <form onSubmit={submit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                 <div>
                   <label className="label">Full Name <span style={{color:'var(--danger)'}}>*</span></label>
                   <input className="input" required value={form.full_name} onChange={e=>set('full_name',e.target.value)} placeholder="As per ID" />
@@ -103,14 +102,10 @@ export default function Registration() {
                       : requisitions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
                 </div>
-                <div style={{ gridColumn: '1/-1' }}>
-                  <label className="label">Current Organisation <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>(optional)</span></label>
-                  <input className="input" value={form.current_organization} onChange={e=>set('current_organization',e.target.value)} placeholder="Optional" />
-                </div>
               </div>
 
               {/* Identity Photo — REQUIRED */}
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 10 }}>
                 <label className="label">
                   Identity Photo <span style={{color:'var(--danger)'}}>*</span>
                   <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>required for proctored assessment</span>
