@@ -4,6 +4,8 @@ import api from '../../api/client';
 
 // ── Default content (seeds the DB first time) ─────────────────────────────
 const DEFAULT = {
+  page_title: 'About This Assessment',
+  page_subtitle: 'I\u0026O Enterprise Production Engineering · LPL Financial GCC India',
   hero_tag: 'I\u0026O · Enterprise Production Engineering',
   hero_title: 'Assessment Question Bank',
   hero_subtitle: 'Wealth-Tech · Enterprise Operations · Production Engineering · Apps Engineering Support',
@@ -127,8 +129,8 @@ export default function About() {
       {/* ── Topbar ── */}
       <div className="admin-topbar">
         <div>
-          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:22 }}>About This Assessment</div>
-          <div style={{ fontSize:13, color:'var(--text-2)' }}>I&O Enterprise Production Engineering · LPL Financial GCC India</div>
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:22 }}>{editing ? <input className="input" style={{fontSize:18,height:32,width:320}} value={draft.page_title} onChange={e=>setDraft(d=>({...d,page_title:e.target.value}))} /> : D.page_title}</div>
+          <div style={{ fontSize:13, color:'var(--text-2)' }}>{editing ? <input className="input" style={{fontSize:12,height:28,width:380}} value={draft.page_subtitle} onChange={e=>setDraft(d=>({...d,page_subtitle:e.target.value}))} /> : D.page_subtitle}</div>
         </div>
         <div style={{ display:'flex', gap:8 }}>
           {editing ? (
