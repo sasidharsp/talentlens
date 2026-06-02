@@ -755,3 +755,17 @@ def get_proctor_config(db: Session = Depends(get_db)):
         "snap_ms":          cfg.snap_ms,
         "violation_weights":cfg.violation_weights or {},
     }
+
+
+# ─── PUBLIC ASSESSMENT CONFIG (no auth — called by Instructions page) ───────────
+@router.get("/assessment-config")
+def get_assessment_config(db: Session = Depends(get_db)):
+    """Returns segment question counts and timer durations for the Instructions page."""
+    return {
+        "seg1_count": get_config_int(db, "seg1_question_count", 15),
+        "seg1_time":  get_config_int(db, "seg1_timer_minutes",  3),
+        "seg2_count": get_config_int(db, "seg2_question_count", 10),
+        "seg2_time":  get_config_int(db, "seg2_timer_minutes",  8),
+        "seg3_count": get_config_int(db, "seg3_question_count", 2),
+        "seg3_time":  get_config_int(db, "seg3_timer_minutes",  4),
+    }
