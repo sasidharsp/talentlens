@@ -24,6 +24,7 @@ import Round2Candidates from './pages/admin/Round2Candidates'
 import LiveMonitor from './pages/admin/LiveMonitor'
 import AdminHome from './pages/admin/AdminHome'
 import About from './pages/admin/About'
+import Architecture from './pages/admin/Architecture'
 import InPersonQuestions from './pages/admin/InPersonQuestions'
 import QAdminHome from './pages/admin/QAdminHome'
 import ProctoringSettings from './pages/admin/ProctoringSettings'
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="about" element={<About />} />
+            <Route path="architecture" element={<Architecture />} />
             <Route path="home" element={<AdminHome />} />
             <Route path="live" element={<LiveMonitor />} />
             <Route path="candidates" element={<CandidateList />} />
