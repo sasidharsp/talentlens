@@ -307,18 +307,6 @@ class InstructionVersion(Base):
 
 
 # ─────────────────────────── ROUND 2 ───────────────────────────
-
-
-class SiteContent(Base):
-    """Editable page content — key/JSON pairs for About and Architecture pages."""
-    __tablename__ = "site_content"
-    id         = Column(Integer, primary_key=True)
-    key        = Column(String(100), unique=True, nullable=False, index=True)
-    content    = Column(JSON, nullable=False, default=lambda: {})
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-
-
 class ProctoringConfig(Base):
     """Single-row global proctoring settings. Admins edit via /admin/proctoring-config."""
     __tablename__ = "proctoring_config"
