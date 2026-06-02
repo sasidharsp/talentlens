@@ -4,6 +4,9 @@ import api from '../../api/client';
 
 // ── Default content (seeds the DB first time) ─────────────────────────────
 const DEFAULT = {
+  hero_tag: 'I\u0026O · Enterprise Production Engineering',
+  hero_title: 'Assessment Question Bank',
+  hero_subtitle: 'Wealth-Tech · Enterprise Operations · Production Engineering · Apps Engineering Support',
   purpose: `This assessment is purpose-built to identify production engineering talent capable of operating mission-critical wealth-management platforms. Questions are grounded in real-world Sev-1 scenarios drawn from advisor platforms, trading infrastructure, and enterprise middleware estates — not theoretical textbook problems. The goal is to surface engineers who think like senior production engineers, not administrators.`,
   assessment_areas: [
     { title:'Deep Troubleshooting',          desc:'Isolate failure domains across infra/app/network/storage layers' },
@@ -157,14 +160,14 @@ export default function About() {
           color:'#fff', padding:'48px 48px 40px', position:'relative', overflow:'hidden' }}>
           <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.12em',
             textTransform:'uppercase', opacity:0.6, marginBottom:12 }}>
-            I&O · Enterprise Production Engineering
+            {editing ? <input style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:6,padding:'3px 8px',fontSize:11,color:'#fff',width:'100%',letterSpacing:'0.12em',textTransform:'uppercase'}} value={draft.hero_tag} onChange={e=>setDraft(d=>({...d,hero_tag:e.target.value}))} /> : D.hero_tag}
           </div>
           <h1 style={{ fontFamily:"'DM Serif Display',Georgia,serif", fontSize:36,
             fontWeight:400, margin:'0 0 10px', lineHeight:1.2 }}>
-            Assessment Question Bank
+            {editing ? <input style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:6,padding:'4px 10px',fontSize:28,color:'#fff',width:'100%',fontFamily:"'DM Serif Display',Georgia,serif"}} value={draft.hero_title} onChange={e=>setDraft(d=>({...d,hero_title:e.target.value}))} /> : D.hero_title}
           </h1>
           <p style={{ fontSize:15, opacity:0.75, margin:'0 0 28px', maxWidth:620, lineHeight:1.6 }}>
-            Wealth-Tech · Enterprise Operations · Production Engineering · Apps Engineering Support
+            {editing ? <input style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:6,padding:'4px 10px',fontSize:13,color:'#fff',width:'100%',opacity:1}} value={draft.hero_subtitle} onChange={e=>setDraft(d=>({...d,hero_subtitle:e.target.value}))} /> : D.hero_subtitle}
           </p>
           <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
             {[{ n:`${total}+`, l:'Total questions' },{ n:'12', l:'Technical clusters' },
