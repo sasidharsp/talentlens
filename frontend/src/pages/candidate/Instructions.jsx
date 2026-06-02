@@ -46,12 +46,12 @@ export default function Instructions() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Zap size={16} color="#fff" />
+          <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Zap size={13} color="#fff" />
           </div>
-          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: 'var(--text)' }}>TalentLens</span>
+          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: 'var(--text)' }}>TalentLens</span>
         </div>
         {state?.reference_code && (
           <div style={{ textAlign: 'right' }}>
@@ -63,10 +63,10 @@ export default function Instructions() {
         )}
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '36px 24px 60px' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '16px 24px 24px' }}>
         <div style={{ width: '100%', maxWidth: 660 }}>
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 30, fontWeight: 400, color: 'var(--text)', marginBottom: 6 }}>
+          <div style={{ textAlign: 'center', marginBottom: 12 }}>
+            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, fontWeight: 400, color: 'var(--text)', marginBottom: 6 }}>
               Assessment Instructions
             </h1>
             {data.candidate_name && (
@@ -77,14 +77,14 @@ export default function Instructions() {
           {/* Total time banner */}
           <div style={{
             background: 'linear-gradient(135deg, #1E1B4B 0%, #4338CA 100%)',
-            borderRadius: 12, padding: '18px 24px', marginBottom: 20,
+            borderRadius: 10, padding: '12px 18px', marginBottom: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Timer size={24} color="#A5B4FC" />
               <div>
                 <div style={{ fontSize: 12, color: '#A5B4FC', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Time Allotted</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>{fmtTime(totalMins)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>{fmtTime(totalMins)}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 16 }}>
@@ -99,30 +99,24 @@ export default function Instructions() {
 
 
 
-          {/* Custom instructions from admin */}
-          {data.instructions && data.instructions !== 'Please complete all three segments carefully.' && (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Additional Instructions</div>
-              <div
-                className="instruction-content"
-                style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.8 }}
-                dangerouslySetInnerHTML={{ __html: data.instructions }}
-              />
-            </div>
-          )}
 
-          {/* Warnings */}
+          {/* Instructions block */}
           <div style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <AlertTriangle size={17} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Important — Please read before starting</div>
-                <ul style={{ fontSize: 13, color: '#92400E', lineHeight: 1.9, paddingLeft: 16 }}>
-                  <li>The assessment is <strong>proctored</strong> — your webcam will be active and tab switches are monitored</li>
-                  <li>Unanswered questions when time expires are submitted as blank</li>
-                  <li>Do not close or refresh the browser during the assessment</li>
-                  <li>Copy-paste and keyboard shortcuts are disabled</li>
-                  <li>This assessment may only be attempted once</li>
+              <div style={{ width: '100%' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--warning)', marginBottom: 8 }}>Please read before starting</div>
+                <ul style={{ fontSize: 13, color: '#92400E', lineHeight: 1.9, paddingLeft: 16, margin: 0 }}>
+                  {(data.segments || []).map(s => {
+                    const desc = s.number === 1
+                      ? `${s.questions} Multiple Choice Questions — ${fmtTime(s.timer_minutes || Math.round((s.timer_seconds||0)/60))} timer. Answers are auto-submitted when time expires.`
+                      : s.number === 2
+                      ? `${s.questions} Multiple Choice Questions with optional rationale — ${fmtTime(s.timer_minutes || Math.round((s.timer_seconds||0)/60))} timer.`
+                      : `${s.questions} Scenario-Based Questions requiring detailed written responses — ${fmtTime(s.timer_minutes || Math.round((s.timer_seconds||0)/60))} timer.`;
+                    return <li key={s.number}><strong>Segment {s.number}:</strong> {desc}</li>;
+                  })}
+                  <li>Once you begin a segment you <strong>cannot return</strong> to a previous one. Ensure a stable internet connection throughout.</li>
+                  <li><strong>Proctoring:</strong> This assessment is monitored via webcam. By proceeding you consent to periodic snapshots, gaze &amp; movement tracking, and audio activity detection for integrity purposes.</li>
                 </ul>
               </div>
             </div>
