@@ -928,6 +928,49 @@ def get_instruction_history(
         for v in versions
     ]
 
+
+# ─── SITE CONTENT (About page editor) ───────────────────────────────────────
+@router.get("/site-content/{key}")
+def get_site_content(
+    key: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_any_staff),
+):
+    """Fetch stored site content (JSON) by key."""
+    row = db.query(models.SystemConfig).filter_by(key=f"site_content_{key}").first()
+    if not row:
+        return {"content": None}
+    try:
+        return {"content": json.loads(row.value)}
+    except Exception:
+        return {"content": None}
+
+
+@router.put("/site-content/{key}")
+def put_site_content(
+    key: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Save site content (JSON) by key."""
+    content = payload.get("content")
+    if content is None:
+        raise HTTPException(400, "content is required.")
+    cfg_key = f"site_content_{key}"
+    row = db.query(models.SystemConfig).filter_by(key=cfg_key).first()
+    if row:
+        row.value = json.dumps(content)
+    else:
+        db.add(models.SystemConfig(
+            key=cfg_key,
+            value=json.dumps(content),
+            description=f"Site content for {key} page",
+        ))
+    db.commit()
+    return {"message": "Saved."}
+
+
 # ─────────────── AI RECOMMENDATION ───────────────
 @router.post("/candidates/{session_id}/recommend")
 def generate_ai_recommendation(
