@@ -2,6 +2,7 @@
 Admin routes — requires authentication.
 Handles: candidate listing, evaluation triggering, interview rounds, status management, user management.
 """
+import json
 import math
 import os
 from datetime import datetime, timedelta
