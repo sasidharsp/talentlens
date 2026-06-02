@@ -75,24 +75,24 @@ export default function Registration() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                 <div>
                   <label className="label" style={{fontSize:11,marginBottom:2}}>Full Name <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input className="input" style={{height:32,fontSize:13}} required value={form.full_name} onChange={e=>set('full_name',e.target.value)} placeholder="As per ID" />
+                  <input className="input" style={{height:32,fontSize:12}} required value={form.full_name} onChange={e=>set('full_name',e.target.value)} placeholder="As per ID" />
                 </div>
                 <div>
                   <label className="label" style={{fontSize:11,marginBottom:2}}>Email Address <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input type="email" className="input" style={{height:32,fontSize:13}} required value={form.email} onChange={e=>set('email',e.target.value)} placeholder="you@email.com" />
+                  <input type="email" className="input" style={{height:32,fontSize:12}} required value={form.email} onChange={e=>set('email',e.target.value)} placeholder="you@email.com" />
                 </div>
                 <div>
                   <label className="label" style={{fontSize:11,marginBottom:2}}>Mobile Number <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input className="input" style={{height:32,fontSize:13}} required value={form.mobile} onChange={e=>set('mobile',e.target.value)} placeholder="+91 98765 43210" />
+                  <input className="input" style={{height:32,fontSize:12}} required value={form.mobile} onChange={e=>set('mobile',e.target.value)} placeholder="+91 98765 43210" />
                 </div>
                 <div>
                   <label className="label" style={{fontSize:11,marginBottom:2}}>Years of Experience <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input type="number" className="input" style={{height:32,fontSize:13}} required min="0" max="50" step="0.5"
+                  <input type="number" className="input" style={{height:32,fontSize:12}} required min="0" max="50" step="0.5"
                     value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)} placeholder="e.g. 4.5" />
                 </div>
                 <div style={{ gridColumn: '1/-1' }}>
                   <label className="label" style={{fontSize:11,marginBottom:2}}>Applying For <span style={{color:'var(--danger)'}}>*</span></label>
-                  <select className="input" style={{height:32,fontSize:13}} required value={form.requisition_id} onChange={e=>set('requisition_id',e.target.value)}>
+                  <select className="input" style={{height:32,fontSize:10}} required value={form.requisition_id} onChange={e=>set('requisition_id',e.target.value)}>
                     <option value="">Select role…</option>
                     {requisitions.length === 0
                       ? <option disabled>No active requisitions — contact admin</option>
