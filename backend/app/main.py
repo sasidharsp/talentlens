@@ -182,6 +182,23 @@ def seed_defaults():
             ).first():
                 db.add(models.ExperienceBracket(label=label, min_years=mn, max_years=mx))
 
+
+        # ── Default pre_assessment instructions (editable via admin Settings) ──
+        if not db.query(models.InstructionVersion).filter_by(
+            instruction_type="pre_assessment", is_active=True
+        ).first():
+            db.add(models.InstructionVersion(
+                instruction_type="pre_assessment",
+                content=(
+                    "Once you begin a segment you cannot return to a previous one. "
+                    "Ensure a stable internet connection throughout.\n"
+                    "Proctoring: This assessment is monitored via webcam. By proceeding you "
+                    "consent to periodic snapshots, gaze & movement tracking, and audio activity "
+                    "detection for integrity purposes. All data is used solely for assessment evaluation."
+                ),
+                is_active=True,
+            ))
+
         db.commit()
         print("✅ Database seeded with defaults.")
     except Exception as e:

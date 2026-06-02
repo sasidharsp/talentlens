@@ -115,8 +115,9 @@ export default function Instructions() {
                       : `${s.questions} Scenario-Based Questions requiring detailed written responses — ${fmtTime(s.timer_minutes || Math.round((s.timer_seconds||0)/60))} timer.`;
                     return <li key={s.number}><strong>Segment {s.number}:</strong> {desc}</li>;
                   })}
-                  <li>Once you begin a segment you <strong>cannot return</strong> to a previous one. Ensure a stable internet connection throughout.</li>
-                  <li><strong>Proctoring:</strong> This assessment is monitored via webcam. By proceeding you consent to periodic snapshots, gaze &amp; movement tracking, and audio activity detection for integrity purposes.</li>
+                  {(data.instructions || '').split('\n').filter(l => l.trim()).map((line, i) => (
+                    <li key={i}>{line.replace(/^[-•*]\s*/, '')}</li>
+                  ))}
                 </ul>
               </div>
             </div>

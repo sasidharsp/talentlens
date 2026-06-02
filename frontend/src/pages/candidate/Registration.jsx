@@ -56,18 +56,15 @@ export default function Registration() {
         <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: 'var(--text)' }}>TalentLens</span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '14px 24px 24px' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10px 20px 16px' }}>
         <div style={{ width: '100%', maxWidth: 600 }}>
-          <div style={{ textAlign: 'center', marginBottom: 10 }}>
-            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, fontWeight: 400, color: 'var(--text)', marginBottom: 8 }}>
+          <div style={{ textAlign: 'center', marginBottom: 8 }}>
+            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, fontWeight: 400, color: 'var(--text)', marginBottom: 4 }}>
               Candidate Registration
             </h1>
-            <p style={{ fontSize: 15, color: 'var(--text-2)', lineHeight: 1.6 }}>
-              Complete your profile to begin the assessment.
-            </p>
           </div>
 
-          <div className="portal-card" style={{ padding: '16px 20px' }}>
+          <div className="portal-card" style={{ padding: '12px 16px' }}>
             {error && (
               <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)', marginBottom: 20 }}>
                 {error}
@@ -75,27 +72,27 @@ export default function Registration() {
             )}
 
             <form onSubmit={submit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                 <div>
-                  <label className="label">Full Name <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input className="input" required value={form.full_name} onChange={e=>set('full_name',e.target.value)} placeholder="As per ID" />
+                  <label className="label" style={{fontSize:11,marginBottom:2}}>Full Name <span style={{color:'var(--danger)'}}>*</span></label>
+                  <input className="input" style={{height:32,fontSize:13}} required value={form.full_name} onChange={e=>set('full_name',e.target.value)} placeholder="As per ID" />
                 </div>
                 <div>
-                  <label className="label">Email Address <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input type="email" className="input" required value={form.email} onChange={e=>set('email',e.target.value)} placeholder="you@email.com" />
+                  <label className="label" style={{fontSize:11,marginBottom:2}}>Email Address <span style={{color:'var(--danger)'}}>*</span></label>
+                  <input type="email" className="input" style={{height:32,fontSize:13}} required value={form.email} onChange={e=>set('email',e.target.value)} placeholder="you@email.com" />
                 </div>
                 <div>
-                  <label className="label">Mobile Number <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input className="input" required value={form.mobile} onChange={e=>set('mobile',e.target.value)} placeholder="+91 98765 43210" />
+                  <label className="label" style={{fontSize:11,marginBottom:2}}>Mobile Number <span style={{color:'var(--danger)'}}>*</span></label>
+                  <input className="input" style={{height:32,fontSize:13}} required value={form.mobile} onChange={e=>set('mobile',e.target.value)} placeholder="+91 98765 43210" />
                 </div>
                 <div>
-                  <label className="label">Years of Experience <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input type="number" className="input" required min="0" max="50" step="0.5"
+                  <label className="label" style={{fontSize:11,marginBottom:2}}>Years of Experience <span style={{color:'var(--danger)'}}>*</span></label>
+                  <input type="number" className="input" style={{height:32,fontSize:13}} required min="0" max="50" step="0.5"
                     value={form.years_of_experience} onChange={e=>set('years_of_experience',e.target.value)} placeholder="e.g. 4.5" />
                 </div>
                 <div style={{ gridColumn: '1/-1' }}>
-                  <label className="label">Applying For <span style={{color:'var(--danger)'}}>*</span></label>
-                  <select className="input" required value={form.requisition_id} onChange={e=>set('requisition_id',e.target.value)}>
+                  <label className="label" style={{fontSize:11,marginBottom:2}}>Applying For <span style={{color:'var(--danger)'}}>*</span></label>
+                  <select className="input" style={{height:32,fontSize:13}} required value={form.requisition_id} onChange={e=>set('requisition_id',e.target.value)}>
                     <option value="">Select role…</option>
                     {requisitions.length === 0
                       ? <option disabled>No active requisitions — contact admin</option>
@@ -105,13 +102,13 @@ export default function Registration() {
               </div>
 
               {/* Identity Photo — REQUIRED */}
-              <div style={{ marginBottom: 10 }}>
-                <label className="label">
+              <div style={{ marginBottom: 8 }}>
+                <label className="label" style={{fontSize:11,marginBottom:2}}>
                   Identity Photo <span style={{color:'var(--danger)'}}>*</span>
                   <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400, marginLeft: 4 }}>required for proctored assessment</span>
                 </label>
                 {!showWebcam ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', background: 'var(--surface-2)', borderRadius: 10, border: `1px dashed ${webcamPhoto ? 'var(--success-border)' : 'var(--danger-border)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 12px', background: 'var(--surface-2)', borderRadius: 10, border: `1px dashed ${webcamPhoto ? 'var(--success-border)' : 'var(--danger-border)'}` }}>
                     {webcamPhoto ? (
                       <>
                         <CheckCircle size={18} color="var(--success)" />
@@ -129,7 +126,7 @@ export default function Registration() {
                     )}
                   </div>
                 ) : (
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: 16 }}>
+                  <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: 8 }}>
                     <WebcamCapture
                       onCapture={(blob, dataUrl) => { if (blob) { setWebcamPhoto(blob); setShowWebcam(false); } }}
                       onSkip={null}
